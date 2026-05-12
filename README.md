@@ -21,23 +21,23 @@
 
 首页把创作入口、使用提示和工作流说明集中在一个屏幕内，适合直接从预设切到联网参考，再进入生成。
 
-![首页与工作台](./89050d62-b104-41c0-94b2-51bd367d6715.png)
+<img width="2315" height="1287" alt="89050d62-b104-41c0-94b2-51bd367d6715" src="https://github.com/user-attachments/assets/cab9e486-4be5-404d-9172-0f6b6a97e4ce" />
 
 ### 图像模式
 
 图像模式支持内置画风预设、跨分类人物联网搜索、参考图上传，以及生成后的风格解读与历史回看。
 
-![图像模式工作台](./aa5339ad-b204-4fc0-9830-5738a43bd8ce.png)
+<img width="2316" height="1288" alt="aa5339ad-b204-4fc0-9830-5738a43bd8ce" src="https://github.com/user-attachments/assets/b5c7e923-9dca-4486-9a68-f993c9a7414e" />
 
 下面是一张基于梵高式高饱和蓝金色调与强运动感生成的图像结果示例。
 
-![图像生成结果示例](./8f033748-96a9-481c-80a4-9fc165e38d88.png)
+<img width="2315" height="1287" alt="8f033748-96a9-481c-80a4-9fc165e38d88" src="https://github.com/user-attachments/assets/ce284c44-5cbe-47c5-9263-41f6cb0ed564" />
 
 ### 诗词模式
 
 诗词模式提供中外诗人预设、联网代表作加载、文体识别、正文展示、中文译文和诗风解读。
 
-![诗词模式工作台与生成结果](./7f743aab-cb11-4461-9c33-e010e7f872dd.png)
+<img width="2315" height="1285" alt="7f743aab-cb11-4461-9c33-e010e7f872dd" src="https://github.com/user-attachments/assets/aba6596c-959c-4c89-bb6a-3db28f885b12" />
 
 ## 工作方式
 
