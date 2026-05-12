@@ -70,6 +70,105 @@ const MIME_TYPES = {
 
 const styleLookupCache = new Map();
 const externalJsonCache = new Map();
+const LOOKUP_IMAGE_TERMS = ["画家", "艺术家", "painter", "artist", "illustrator", "visual", "动画", "director"];
+const LOOKUP_POEM_TERMS = ["诗人", "词人", "poet", "writer", "poetry", "literary", "俳人"];
+const LOCAL_STYLE_LOOKUP_INDEX = {
+  poem: [
+    {
+      id: "local-poem-liuyong",
+      name: "柳永",
+      aliases: ["耆卿", "柳三变", "liuyong", "liu yong"],
+      description: "北宋词人",
+      summary:
+        "柳永，北宋词人，擅长慢词铺叙，长于都市风物、羁旅行役与离情别绪的刻画，语言晓畅而有音乐性，是宋词婉约一路的重要奠基者。",
+      works: [
+        { id: "local-liuyong-1", title: "雨霖铃", description: "词作", summary: "寒蝉凄切、长亭送别，极擅铺叙离情与时空转换。", imageUrl: "", sourceUrl: "" },
+        { id: "local-liuyong-2", title: "望海潮", description: "词作", summary: "写杭州繁华与湖山胜景，富有城市景观与声色铺陈。", imageUrl: "", sourceUrl: "" },
+        { id: "local-liuyong-3", title: "八声甘州", description: "词作", summary: "羁旅怀人，秋江雨景与身世之感交织。", imageUrl: "", sourceUrl: "" },
+        { id: "local-liuyong-4", title: "蝶恋花", description: "词作", summary: "伫倚危楼、望极春愁，情景相生。", imageUrl: "", sourceUrl: "" },
+      ],
+    },
+    {
+      id: "local-poem-libai",
+      name: "李白",
+      aliases: ["太白", "libai", "li bai"],
+      description: "唐代诗人",
+      summary: "李白，唐代诗人，想象奇崛，语言飞动，常以月、酒、山川和远游构成雄放飘逸的诗歌气象。",
+      works: [
+        { id: "local-libai-1", title: "静夜思", description: "诗作", summary: "以极简语言写思乡。", imageUrl: "", sourceUrl: "" },
+        { id: "local-libai-2", title: "将进酒", description: "诗作", summary: "纵酒高歌，气势奔涌。", imageUrl: "", sourceUrl: "" },
+      ],
+    },
+    {
+      id: "local-poem-dickinson",
+      name: "Emily Dickinson",
+      aliases: ["dickinson", "emily", "emily dickinson", "艾米莉狄金森", "艾米莉·狄金森"],
+      description: "American poet",
+      summary: "Emily Dickinson 以短促而陡峭的抒情著称，擅长用自然、死亡、灵魂与静默意象承载内在震颤。",
+      works: [
+        { id: "local-dickinson-1", title: "Because I could not stop for Death", description: "poem", summary: "以平静叙述逼近死亡经验。", imageUrl: "", sourceUrl: "" },
+        { id: "local-dickinson-2", title: "Hope is the thing with feathers", description: "poem", summary: "以鸟喻希望，凝练有力。", imageUrl: "", sourceUrl: "" },
+      ],
+    },
+    {
+      id: "local-poem-baudelaire",
+      name: "Charles Baudelaire",
+      aliases: ["baudelaire", "charles baudelaire", "波德莱尔", "波特莱尔"],
+      description: "French poet",
+      summary: "Charles Baudelaire 擅写都市感官、颓艳阴影与高贵忧郁，常以香气、夜色、肉身和街道营造现代性诗感。",
+      works: [
+        { id: "local-baudelaire-1", title: "L'Invitation au voyage", description: "poem", summary: "秩序、静谧与感官诱惑并置。", imageUrl: "", sourceUrl: "" },
+        { id: "local-baudelaire-2", title: "Correspondances", description: "poem", summary: "象征主义的重要先声。", imageUrl: "", sourceUrl: "" },
+      ],
+    },
+    {
+      id: "local-poem-basho",
+      name: "松尾芭蕉",
+      aliases: ["芭蕉", "basho", "matsuo basho", "松尾芭蕉"],
+      description: "日本俳人",
+      summary: "松尾芭蕉为日本俳句代表人物，语言极简，强调旅途、静寂与自然瞬间的顿悟感。",
+      works: [
+        { id: "local-basho-1", title: "古池や 蛙飛びこむ 水の音", description: "俳句", summary: "以极静写刹那之响。", imageUrl: "", sourceUrl: "" },
+        { id: "local-basho-2", title: "夏草や 兵どもが 夢の跡", description: "俳句", summary: "荒草与旧梦并置，苍凉深远。", imageUrl: "", sourceUrl: "" },
+      ],
+    },
+  ],
+  image: [
+    {
+      id: "local-image-vangogh",
+      name: "梵高",
+      aliases: ["van gogh", "vincent van gogh", "vangogh", "文森特梵高"],
+      description: "后印象派画家",
+      summary: "梵高的视觉语言以高饱和对比、旋涡式节奏、厚涂笔触和强烈情绪驱动为特征。",
+      works: [
+        { id: "local-vangogh-1", title: "星月夜", description: "油画", summary: "旋涡天空与村镇夜色形成强烈节奏。", imageUrl: "", sourceUrl: "" },
+        { id: "local-vangogh-2", title: "向日葵", description: "油画", summary: "以高纯度黄调建立生命力。", imageUrl: "", sourceUrl: "" },
+      ],
+    },
+    {
+      id: "local-image-miyazaki",
+      name: "宫崎骏",
+      aliases: ["miyazaki", "hayao miyazaki", "宫崎骏"],
+      description: "动画导演与视觉创作者",
+      summary: "宫崎骏式画面常见手绘暖光、自然风感、飞行意象与童话现实交叠，氛围澄澈而富有生命流动。",
+      works: [
+        { id: "local-miyazaki-1", title: "千与千寻", description: "动画电影", summary: "奇幻空间与日常细节交织。", imageUrl: "", sourceUrl: "" },
+        { id: "local-miyazaki-2", title: "龙猫", description: "动画电影", summary: "乡野自然与童年感知并置。", imageUrl: "", sourceUrl: "" },
+      ],
+    },
+    {
+      id: "local-image-popart",
+      name: "波普艺术",
+      aliases: ["pop art", "波普", "波普艺术"],
+      description: "国际经典视觉风格",
+      summary: "波普艺术强调高纯度撞色、商业符号、漫画轮廓与机械复制感，画面张扬直接。",
+      works: [
+        { id: "local-popart-1", title: "Campbell's Soup Cans", description: "代表性作品母题", summary: "消费社会与机械复制美学的象征。", imageUrl: "", sourceUrl: "" },
+        { id: "local-popart-2", title: "Whaam!", description: "代表性作品母题", summary: "漫画式爆炸与高对比色块。", imageUrl: "", sourceUrl: "" },
+      ],
+    },
+  ],
+};
 
 const server = createServer(async (request, response) => {
   try {
@@ -135,7 +234,7 @@ async function handleStyleLookup(request, response) {
   const entityId = String(body.entityId || "").trim();
 
   if (!name) {
-    sendJson(response, 400, { error: kind === "image" ? "请输入画家姓名。" : "请输入诗词人姓名。" });
+    sendJson(response, 400, { error: "请输入艺术家姓名。" });
     return;
   }
 
@@ -143,33 +242,47 @@ async function handleStyleLookup(request, response) {
     styleLookupCache,
     buildStyleLookupCacheKey(kind, name, entityId),
     async () => {
-      const candidates = await searchWikidataCandidates(name, kind);
-      const selectedCandidate = candidates.find((candidate) => candidate.id === entityId) || candidates[0];
-      if (!selectedCandidate) {
-        throw new Error("未找到可用候选人物，请尝试更完整的姓名。");
+      try {
+        const candidates = await searchWikidataCandidates(name, kind);
+        const selectedCandidate = candidates.find((candidate) => candidate.id === entityId) || candidates[0];
+        if (!selectedCandidate) {
+          throw new Error("未找到可用候选人物，请尝试更完整的姓名。");
+        }
+
+        const entity = await getWikidataEntityById(selectedCandidate.id);
+        const summary = await fetchEntitySummary(entity);
+        const matchedKind = detectLookupKind(selectedCandidate.matchedKind, entity.description, summary.extract) || kind;
+        const works = await resolveNotableWorks(entity, matchedKind, summary);
+        const poemForm = matchedKind === "poem" ? detectPoemForm(entity.description, summary.extract, ...works.map((work) => `${work.title} ${work.description} ${work.summary}`)) : "";
+
+        return {
+          candidates: candidates.map((candidate) => ({
+            id: candidate.id,
+            name: candidate.name,
+            description: candidate.description,
+            matchedKind: candidate.matchedKind || kind,
+            poemForm: (candidate.matchedKind || kind) === "poem" ? detectPoemForm(candidate.description, candidate.name) : "",
+          })),
+          selected: {
+            id: entity.id,
+            kind: matchedKind,
+            matchedKind,
+            poemForm,
+            name: entity.label,
+            description: entity.description,
+            summary: summary.extract || "",
+            sourceUrl: summary.pageUrl || "",
+            works,
+            styleSummary: buildLookupStyleSummary(matchedKind, entity, summary, works),
+          },
+        };
+      } catch (error) {
+        const localPayload = buildLocalLookupPayload(name, kind, entityId);
+        if (localPayload) {
+          return localPayload;
+        }
+        throw new Error(formatStyleLookupError(error));
       }
-
-      const entity = await getWikidataEntityById(selectedCandidate.id);
-      const summary = await fetchEntitySummary(entity);
-      const works = await resolveNotableWorks(entity, kind, summary);
-
-      return {
-        candidates: candidates.map((candidate) => ({
-          id: candidate.id,
-          name: candidate.name,
-          description: candidate.description,
-        })),
-        selected: {
-          id: entity.id,
-          kind,
-          name: entity.label,
-          description: entity.description,
-          summary: summary.extract || "",
-          sourceUrl: summary.pageUrl || "",
-          works,
-          styleSummary: buildLookupStyleSummary(kind, entity, summary, works),
-        },
-      };
     },
     LOOKUP_CACHE_TTL_MS,
     LOOKUP_CACHE_MAX_ENTRIES
@@ -266,6 +379,13 @@ async function handleGeneratePoem(request, response) {
   const uploadedTexts = Array.isArray(body.uploadedTexts) ? body.uploadedTexts.slice(0, 10) : [];
   const lookupStyle = normalizeLookupStyle(body.lookupStyle, "poem");
   const poemLanguage = normalizePoemLanguage(preset.language);
+  const poemForm = detectPoemForm(
+    lookupStyle.poemForm,
+    lookupStyle.description,
+    lookupStyle.summary,
+    ...lookupStyle.works.map((work) => `${work.title} ${work.description} ${work.summary}`)
+  );
+  const poemFormGuide = getPoemFormGuide(poemForm, poemLanguage);
 
   if (!prompt) {
     sendJson(response, 400, { error: "诗词提示词不能为空。" });
@@ -281,6 +401,7 @@ async function handleGeneratePoem(request, response) {
   const lookupBlock = lookupStyle.name
     ? [
         `联网参考人物: ${lookupStyle.name}`,
+        `参考文体判断: ${poemFormGuide.referenceLabel}`,
         `人物摘要: ${lookupStyle.summary}`,
         `代表作信息: ${lookupStyle.works.map((work) => `${work.title}${work.summary ? `(${work.summary})` : work.description ? `(${work.description})` : ""}`).join("；")}`,
       ].join("\n")
@@ -290,13 +411,15 @@ async function handleGeneratePoem(request, response) {
     system: [
       "你是一位多语言诗歌创作助手。",
       `当前目标诗歌语言：${poemLanguage.label}。`,
+      `当前目标文体：${poemFormGuide.label}。`,
       "任务：综合诗人预设、用户上传诗词样本、当前提示词，以及可能存在的人物代表作检索结果，先做风格归纳，再写一首新作。",
+      poemFormGuide.systemInstruction,
       poemLanguage.code === "zh"
         ? "要求：不要抄袭输入样本的原句；保持中文诗性和凝练度；输出必须是 JSON。"
         : `要求：不要抄袭输入样本原句；正文必须仅使用${poemLanguage.label}创作；summary 必须用中文说明风格；并额外给出逐行中文译文；输出必须是 JSON。`,
       poemLanguage.code === "zh"
-        ? "JSON 字段必须为 summary, title, lines。lines 必须是字符串数组。"
-        : "JSON 字段必须为 summary, title, lines, translationLines。lines 和 translationLines 都必须是字符串数组，并尽量逐行对应。",
+        ? `JSON 字段必须为 summary, title, lines。lines 必须是字符串数组。${poemFormGuide.jsonInstruction}`
+        : `JSON 字段必须为 summary, title, lines, translationLines。lines 和 translationLines 都必须是字符串数组，并尽量逐行对应。${poemFormGuide.jsonInstruction}`,
     ].join("\n"),
     messages: [
       {
@@ -307,27 +430,28 @@ async function handleGeneratePoem(request, response) {
           `预设语气: ${preset.tone || ""}`,
           `预设意象: ${(preset.imagery || []).join("、")}`,
           `目标输出语言: ${poemLanguage.label}`,
+          `目标输出文体: ${poemFormGuide.label}`,
           `生成要求: ${prompt}`,
           lookupBlock,
           `样本文本:\n${sampleBlock}`,
-          poemLanguage.code === "zh"
-            ? "请返回 JSON：summary 说明你学到的风格；title 是标题；lines 是 4 到 8 行正文。"
-            : `请返回 JSON：summary 用中文说明你学到的风格；title 是${poemLanguage.label}标题；lines 是 4 到 8 行${poemLanguage.label}正文；translationLines 是与正文对应的中文译文。`,
+          poemFormGuide.userInstruction,
         ].join("\n\n"),
       },
     ],
     temperature: 0.95,
   });
 
-  const safeLines = normalizeStringList(result.lines).slice(0, 8);
+  const safeLines = normalizeStringList(result.lines).slice(0, poemFormGuide.maxLines);
   const translationLines = poemLanguage.code === "zh" ? [] : normalizeStringList(result.translationLines).slice(0, 8);
 
   sendJson(response, 200, {
-    summary: `${result.summary || "模型已完成诗风学习。"}${lookupStyle.name ? ` 本次额外参考了 ${lookupStyle.name} 的代表作。` : ""}`,
+    summary: `${result.summary || "模型已完成诗风学习。"}${lookupStyle.name ? ` 本次额外参考了 ${lookupStyle.name} 的代表作。` : ""} 本次按${poemFormGuide.label}创作。`,
     title: result.title || "新作",
     lines: safeLines,
     translationLines,
     language: poemLanguage.code,
+    poemForm,
+    poemFormLabel: poemFormGuide.label,
   });
 }
 
@@ -575,9 +699,118 @@ async function searchWikidataCandidates(name, kind) {
       id: item.id,
       name: item.label || item.display?.label?.value || "未命名",
       description: item.description || "",
+      matchedKind: detectLookupKind(item.description || "", item.label || item.display?.label?.value || "") || kind,
     }))
     .filter((candidate, index, array) => candidate.id && array.findIndex((item) => item.id === candidate.id) === index)
     .slice(0, 8);
+}
+
+function buildLocalLookupPayload(name, kind, entityId) {
+  const entries = searchLocalStyleEntries(name, kind);
+  const selectedEntry = entries.find((entry) => entry.id === entityId) || entries[0];
+  if (!selectedEntry) {
+    return null;
+  }
+
+  const poemForm = selectedEntry.lookupKind === "poem"
+    ? detectPoemForm(selectedEntry.description, selectedEntry.summary, ...(selectedEntry.works || []).map((work) => `${work.title} ${work.description} ${work.summary}`))
+    : "";
+
+  return {
+    candidates: entries.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      description: entry.description,
+      matchedKind: entry.lookupKind,
+      poemForm: entry.lookupKind === "poem" ? detectPoemForm(entry.description, entry.summary, ...(entry.works || []).map((work) => `${work.title} ${work.description} ${work.summary}`)) : "",
+    })),
+    selected: {
+      id: selectedEntry.id,
+      kind: selectedEntry.lookupKind,
+      matchedKind: selectedEntry.lookupKind,
+      poemForm,
+      name: selectedEntry.name,
+      description: selectedEntry.description,
+      summary: selectedEntry.summary,
+      sourceUrl: selectedEntry.sourceUrl || "",
+      works: (selectedEntry.works || []).slice(0, 6).map((work) => ({
+        id: work.id,
+        title: work.title,
+        description: work.description || "",
+        summary: work.summary || "",
+        imageUrl: selectedEntry.lookupKind === "image" ? work.imageUrl || "" : "",
+        sourceUrl: work.sourceUrl || "",
+      })),
+      styleSummary: buildLocalLookupStyleSummary(selectedEntry.lookupKind, selectedEntry),
+    },
+  };
+}
+
+function searchLocalStyleCandidates(name, kind) {
+  return searchLocalStyleEntries(name, kind).map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    description: entry.description,
+  }));
+}
+
+function searchLocalStyleEntries(name, kind) {
+  const normalizedName = normalizeLookupToken(name);
+  if (!normalizedName) {
+    return [];
+  }
+
+  const preferredKinds = kind === "image" ? ["image", "poem"] : ["poem", "image"];
+
+  return preferredKinds
+    .flatMap((searchKind, kindIndex) =>
+      (LOCAL_STYLE_LOOKUP_INDEX[searchKind] || []).map((entry) => ({
+        entry: { ...entry, lookupKind: searchKind },
+        score: scoreLocalLookupEntry(entry, normalizedName) - kindIndex,
+      }))
+    )
+    .filter(({ score }) => score > 0)
+    .sort((left, right) => right.score - left.score)
+    .map(({ entry }) => entry)
+    .filter((entry, index, array) => array.findIndex((item) => item.id === entry.id) === index)
+    .slice(0, 8);
+}
+
+function scoreLocalLookupEntry(entry, normalizedName) {
+  const tokens = [entry.name, ...(entry.aliases || [])].map(normalizeLookupToken).filter(Boolean);
+  if (tokens.some((token) => token === normalizedName)) {
+    return 100;
+  }
+  if (tokens.some((token) => token.startsWith(normalizedName) || normalizedName.startsWith(token))) {
+    return 70;
+  }
+  if (tokens.some((token) => token.includes(normalizedName) || normalizedName.includes(token))) {
+    return 40;
+  }
+  return 0;
+}
+
+function normalizeLookupToken(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[\s·・'"“”‘’`´,，。.!！?？:：;；()（）\-_/]+/g, "");
+}
+
+function buildLocalLookupStyleSummary(kind, entry) {
+  const workTitles = (entry.works || []).slice(0, 5).map((work) => work.title).join("、");
+  if (kind === "image") {
+    return `${entry.name} 的人物摘要为：${entry.summary}。代表作包括 ${workTitles || "若干作品"}。可据此归纳色彩、笔触、题材与构图倾向。`;
+  }
+  return `${entry.name} 的人物摘要为：${entry.summary}。代表作包括 ${workTitles || "若干作品"}。可据此归纳意象、语气、节奏与句法姿态。`;
+}
+
+function formatStyleLookupError(error) {
+  const message = String(error?.message || "").trim();
+  if (/联网检索超时|fetch failed|connect timeout|request to .* failed|请求外部资料失败/i.test(message)) {
+    return "联网百科暂时不可用，且本地兜底资料中未找到对应人物。请稍后重试或尝试更完整的姓名。";
+  }
+  return message || "联网检索失败，请稍后重试。";
 }
 
 async function getWikidataEntityById(entityId) {
@@ -592,10 +825,27 @@ async function getWikidataEntityById(entityId) {
 
 function scoreCandidate(item, kind) {
   const description = `${item.label || ""} ${item.description || ""}`.toLowerCase();
-  const imageTerms = ["画家", "艺术家", "painter", "artist", "illustrator", "visual"];
-  const poemTerms = ["诗人", "词人", "poet", "writer", "poetry", "literary"];
-  const terms = kind === "image" ? imageTerms : poemTerms;
-  return terms.reduce((score, term) => score + (description.includes(term) ? 3 : 0), 0) + (item.match?.text ? 1 : 0);
+  const terms = [...LOOKUP_IMAGE_TERMS, ...LOOKUP_POEM_TERMS];
+  const kindBoostTerms = kind === "image" ? LOOKUP_IMAGE_TERMS : LOOKUP_POEM_TERMS;
+  return (
+    terms.reduce((score, term) => score + (description.includes(term) ? 2 : 0), 0) +
+    kindBoostTerms.reduce((score, term) => score + (description.includes(term) ? 1 : 0), 0) +
+    (item.match?.text ? 1 : 0)
+  );
+}
+
+function detectLookupKind(...texts) {
+  const haystack = texts.filter(Boolean).join(" ").toLowerCase();
+  if (!haystack) {
+    return "";
+  }
+
+  const imageScore = LOOKUP_IMAGE_TERMS.reduce((score, term) => score + (haystack.includes(term) ? 2 : 0), 0);
+  const poemScore = LOOKUP_POEM_TERMS.reduce((score, term) => score + (haystack.includes(term) ? 2 : 0), 0);
+  if (imageScore === poemScore) {
+    return "";
+  }
+  return imageScore > poemScore ? "image" : "poem";
 }
 
 async function getWikidataEntities(ids) {
@@ -694,13 +944,15 @@ function buildLookupStyleSummary(kind, entity, summary, works) {
 
 function normalizeLookupStyle(lookupStyle, kind) {
   if (!lookupStyle || typeof lookupStyle !== "object") {
-    return { kind, name: "", summary: "", works: [] };
+    return { kind, name: "", description: "", summary: "", poemForm: "", works: [] };
   }
 
   return {
     kind,
     name: String(lookupStyle.name || "").slice(0, 120),
+    description: String(lookupStyle.description || "").slice(0, 500),
     summary: String(lookupStyle.summary || lookupStyle.styleSummary || "").slice(0, 3000),
+    poemForm: normalizePoemForm(lookupStyle.poemForm || lookupStyle.literaryForm || ""),
     works: Array.isArray(lookupStyle.works)
       ? lookupStyle.works.slice(0, 6).map((work) => ({
           title: String(work.title || "").slice(0, 120),
@@ -709,6 +961,85 @@ function normalizeLookupStyle(lookupStyle, kind) {
           imageUrl: kind === "image" ? String(work.imageUrl || "") : "",
         }))
       : [],
+  };
+}
+
+function normalizePoemForm(value) {
+  switch (String(value || "").trim().toLowerCase()) {
+    case "ci":
+      return "ci";
+    case "haiku":
+      return "haiku";
+    default:
+      return "poem";
+  }
+}
+
+function detectPoemForm(...texts) {
+  const haystack = texts.filter(Boolean).join(" ").toLowerCase();
+  if (!haystack) {
+    return "poem";
+  }
+
+  if (["俳句", "俳人", "haiku", "hokku"].some((term) => haystack.includes(term))) {
+    return "haiku";
+  }
+
+  if (["词人", "宋词", "词作", "词牌", "慢词", "小令", "长短句"].some((term) => haystack.includes(term))) {
+    return "ci";
+  }
+
+  return "poem";
+}
+
+function getPoemFormGuide(form, poemLanguage) {
+  if (form === "ci") {
+    return {
+      label: poemLanguage.code === "zh" ? "词" : `${poemLanguage.label}抒情长短句`,
+      referenceLabel: "词人 / 词体",
+      maxLines: poemLanguage.code === "zh" ? 12 : 10,
+      systemInstruction:
+        poemLanguage.code === "zh"
+          ? "若检索人物被判定为词人，正文必须按词体创作，允许长短句，强调乐感、铺叙、转折与情绪回环。"
+          : `若检索人物被判定为词人，请用${poemLanguage.label}写出具有抒情长短句气质的作品，不要退化成说明文。`,
+      jsonInstruction:
+        poemLanguage.code === "zh"
+          ? "title 应是词牌名或词题；lines 应为 6 到 12 行，允许长短句，不要平均分行。"
+          : `title 应贴近词题；lines 应为 6 到 10 行${poemLanguage.label}正文，保持抒情长短句节奏。`,
+      userInstruction:
+        poemLanguage.code === "zh"
+          ? "请返回 JSON：summary 说明你学到的风格；title 是词牌名或词题；lines 是 6 到 12 行中文正文，允许长短句，整体写成一首词。"
+          : `请返回 JSON：summary 用中文说明你学到的风格；title 是${poemLanguage.label}标题；lines 是 6 到 10 行${poemLanguage.label}正文，呈抒情长短句结构；translationLines 是与正文对应的中文译文。`,
+    };
+  }
+
+  if (form === "haiku") {
+    return {
+      label: poemLanguage.code === "ja" ? "俳句" : `${poemLanguage.label}短诗`,
+      referenceLabel: "俳人 / 俳句",
+      maxLines: 3,
+      systemInstruction: "若检索人物被判定为俳人，正文应高度凝练，聚焦单一瞬间与意象转折，写成三行短诗。",
+      jsonInstruction: "title 保持简短；lines 必须恰好 3 行，避免扩写成普通长诗。",
+      userInstruction:
+        poemLanguage.code === "zh"
+          ? "请返回 JSON：summary 说明你学到的风格；title 是标题；lines 是恰好 3 行正文，整体写成俳句气质的短诗。"
+          : `请返回 JSON：summary 用中文说明你学到的风格；title 是${poemLanguage.label}标题；lines 是恰好 3 行${poemLanguage.label}正文；translationLines 是与正文对应的中文译文。`,
+    };
+  }
+
+  return {
+    label: poemLanguage.code === "zh" ? "诗" : `${poemLanguage.label}诗歌`,
+    referenceLabel: "诗人 / 诗体",
+    maxLines: 8,
+    systemInstruction: "若检索人物被判定为诗人，正文按诗体创作，保持意象、节奏与句法的诗性。",
+    jsonInstruction:
+      poemLanguage.code === "zh"
+        ? "title 为标题；lines 应为 4 到 8 行正文。"
+        : `title 为${poemLanguage.label}标题；lines 应为 4 到 8 行${poemLanguage.label}正文。`,
+    userInstruction:
+      poemLanguage.code === "zh"
+        ? "请返回 JSON：summary 说明你学到的风格；title 是标题；lines 是 4 到 8 行正文，整体写成一首诗。"
+        : `请返回 JSON：summary 用中文说明你学到的风格；title 是${poemLanguage.label}标题；lines 是 4 到 8 行${poemLanguage.label}正文；translationLines 是与正文对应的中文译文。`,
   };
 }
 

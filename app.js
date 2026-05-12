@@ -588,7 +588,7 @@ function renderLookupResult(mode) {
           <h3>${escapeHtml(activeLookup.name || "未命名")}</h3>
           <div class="lookup-meta">${escapeHtml(activeLookup.description || "已联网获取人物条目")}</div>
         </div>
-        <div class="lookup-meta">${mode === "image" ? "画风参考已启用" : "诗风参考已启用"}</div>
+        <div class="lookup-meta">${mode === "image" ? "画风参考已启用" : getPoemLookupBadge(activeLookup.poemForm)}</div>
       </div>
       <p>${escapeHtml(activeLookup.summary || activeLookup.styleSummary || "已抓取人物摘要与代表作信息。")}</p>
       ${candidateMarkup}
@@ -785,7 +785,7 @@ async function lookupStyle(mode, entityId) {
   const name = input.value.trim();
 
   if (!name) {
-    const message = mode === "image" ? "请输入画家姓名。" : "请输入诗词人姓名。";
+    const message = "请输入艺术家姓名。";
     if (mode === "image") {
       renderImageSummary(message);
     } else {
@@ -804,14 +804,34 @@ async function lookupStyle(mode, entityId) {
       body: JSON.stringify({ kind: mode, name, entityId }),
     });
 
-    state[mode].lookupCandidates = compactLookupCandidates(result.candidates);
-    state[mode].lookup = compactLookup(result.selected || result, mode);
-    renderLookupResult(mode);
+    const targetMode = result.selected?.matchedKind === "poem" ? "poem" : "image";
+    const switched = targetMode !== mode;
+    const targetInput = targetMode === "image" ? dom.imageLookupName : dom.poemLookupName;
+    targetInput.value = name;
+    state[targetMode].lookupCandidates = compactLookupCandidates(result.candidates);
+    state[targetMode].lookup = compactLookup(result.selected || result, targetMode);
+
+    if (switched) {
+      state[mode].lookupCandidates = [];
+      state[mode].lookup = null;
+      renderLookupResult(mode);
+      switchMode(targetMode);
+    }
+
+    renderLookupResult(targetMode);
     const selectedName = result.selected?.name || result.name;
-    if (mode === "image") {
-      renderImageSummary(`${selectedName} 的互联网代表作已加载，可直接参与生成。`);
+    if (targetMode === "image") {
+      renderImageSummary(
+        switched
+          ? `${selectedName} 已识别为图像类艺术家，页面已自动切换并加载其代表作参考。`
+          : `${selectedName} 的互联网代表作已加载，可直接参与生成。`
+      );
     } else {
-      renderPoemSummary(`${selectedName} 的互联网代表作已加载，可直接参与生成。`);
+      renderPoemSummary(
+        switched
+          ? `${selectedName} 已识别为诗词类艺术家，页面已自动切换并加载其代表作参考。`
+          : `${selectedName} 的互联网代表作已加载，可直接参与生成。`
+      );
     }
   } catch (error) {
     renderLookupStatus(mode, error.message || "联网检索失败，请稍后重试。");
@@ -845,6 +865,8 @@ function compactLookupCandidates(candidates) {
         id: String(candidate.id || ""),
         name: String(candidate.name || candidate.label || "未命名"),
         description: String(candidate.description || ""),
+        matchedKind: candidate.matchedKind === "poem" ? "poem" : "image",
+        poemForm: normalizePoemForm(candidate.poemForm || ""),
       }))
     : [];
 }
@@ -853,6 +875,8 @@ function compactLookup(lookup, mode) {
   return {
     id: String(lookup.id || ""),
     kind: mode,
+    matchedKind: lookup.matchedKind === "poem" ? "poem" : "image",
+    poemForm: normalizePoemForm(lookup.poemForm || ""),
     name: String(lookup.name || "未命名参考"),
     description: String(lookup.description || ""),
     summary: String(lookup.summary || lookup.styleSummary || ""),
@@ -868,6 +892,25 @@ function compactLookup(lookup, mode) {
         }))
       : [],
   };
+}
+
+function normalizePoemForm(value) {
+  const form = String(value || "").trim().toLowerCase();
+  if (form === "ci" || form === "haiku") {
+    return form;
+  }
+  return "poem";
+}
+
+function getPoemLookupBadge(poemForm) {
+  switch (normalizePoemForm(poemForm)) {
+    case "ci":
+      return "词体参考已启用";
+    case "haiku":
+      return "俳句参考已启用";
+    default:
+      return "诗体参考已启用";
+  }
 }
 
 function saveTemplate(mode) {

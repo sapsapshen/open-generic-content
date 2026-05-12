@@ -5,19 +5,65 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 RUNTIME_DIR="$ROOT_DIR/.runtime"
 PID_FILE="$RUNTIME_DIR/server.pid"
+PORT_FILE="$RUNTIME_DIR/server.port"
 LOG_FILE="$RUNTIME_DIR/server.log"
 DISPLAY_PORT=${PORT:-}
+PORT_SOURCE=""
 
 mkdir -p "$RUNTIME_DIR"
 
 resolve_port() {
+  if [ -n "$DISPLAY_PORT" ]; then
+    PORT_SOURCE="env"
+  fi
+
   if [ -z "$DISPLAY_PORT" ] && [ -f "$ROOT_DIR/.env" ]; then
     DISPLAY_PORT=$(sed -n 's/^PORT=//p' "$ROOT_DIR/.env" | tail -n 1 | tr -d '"' | tr -d "'" | tr -d ' ')
+    if [ -n "$DISPLAY_PORT" ]; then
+      PORT_SOURCE="dotenv"
+    fi
+  fi
+
+  if [ -z "$DISPLAY_PORT" ] && [ -f "$PORT_FILE" ]; then
+    DISPLAY_PORT=$(cat "$PORT_FILE" 2>/dev/null | tr -d ' ')
+    if [ -n "$DISPLAY_PORT" ]; then
+      PORT_SOURCE="portfile"
+    fi
+  fi
+
+  if [ -z "$DISPLAY_PORT" ] && [ -f "$ROOT_DIR/.env.example" ]; then
+    DISPLAY_PORT=$(sed -n 's/^PORT=//p' "$ROOT_DIR/.env.example" | tail -n 1 | tr -d '"' | tr -d "'" | tr -d ' ')
+    if [ -n "$DISPLAY_PORT" ]; then
+      PORT_SOURCE="example"
+    fi
   fi
 
   if [ -z "$DISPLAY_PORT" ]; then
     DISPLAY_PORT=3000
+    PORT_SOURCE="default"
   fi
+}
+
+is_port_in_use() {
+  port="$1"
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 1
+  fi
+  lsof -t -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+select_available_port() {
+  preferred_port="$1"
+
+  for candidate in "$preferred_port" 3017 3001 3002 3003 3004 3005 3006 3007 3008 3009 3010 3011 3012 3013 3014 3015 3016 3018 3019 3020; do
+    [ -n "$candidate" ] || continue
+    if ! is_port_in_use "$candidate"; then
+      DISPLAY_PORT="$candidate"
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 get_process_cwd() {
@@ -114,6 +160,7 @@ if [ -f "$PID_FILE" ]; then
   if is_project_server_pid "$EXISTING_PID" && is_pid_listening_on_port "$EXISTING_PID" "$DISPLAY_PORT"; then
     HEALTH_PAYLOAD=$(read_health_payload)
     if [ -n "$HEALTH_PAYLOAD" ] && ! is_legacy_health_payload "$HEALTH_PAYLOAD"; then
+      echo "$DISPLAY_PORT" > "$PORT_FILE"
       echo "服务已在运行，PID: $EXISTING_PID"
       echo "日志文件: $LOG_FILE"
       echo "访问地址: http://localhost:$DISPLAY_PORT"
@@ -131,6 +178,7 @@ if [ -n "$ADOPTED_PID" ]; then
   HEALTH_PAYLOAD=$(read_health_payload)
   if [ -n "$HEALTH_PAYLOAD" ] && ! is_legacy_health_payload "$HEALTH_PAYLOAD"; then
     echo "$ADOPTED_PID" > "$PID_FILE"
+    echo "$DISPLAY_PORT" > "$PORT_FILE"
     echo "检测到服务已在运行，已写回 PID: $ADOPTED_PID"
     echo "日志文件: $LOG_FILE"
     echo "访问地址: http://localhost:$DISPLAY_PORT"
@@ -141,19 +189,34 @@ if [ -n "$ADOPTED_PID" ]; then
   terminate_pid "$ADOPTED_PID"
 fi
 
-if command -v lsof >/dev/null 2>&1 && lsof -t -nP -iTCP:"$DISPLAY_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  print_port_conflict
-  exit 1
+if is_port_in_use "$DISPLAY_PORT"; then
+  case "$PORT_SOURCE" in
+    env|dotenv)
+      print_port_conflict
+      exit 1
+      ;;
+    *)
+      ORIGINAL_PORT="$DISPLAY_PORT"
+      if ! select_available_port "$DISPLAY_PORT"; then
+        print_port_conflict
+        exit 1
+      fi
+      if [ "$DISPLAY_PORT" != "$ORIGINAL_PORT" ]; then
+        echo "端口 $ORIGINAL_PORT 已被占用，已自动切换到 $DISPLAY_PORT。"
+      fi
+      ;;
+  esac
 fi
 
 cd "$ROOT_DIR"
-nohup node server.js >> "$LOG_FILE" 2>&1 &
+PORT="$DISPLAY_PORT" nohup node server.js >> "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 echo "$SERVER_PID" > "$PID_FILE"
 
 sleep 1
 
 if kill -0 "$SERVER_PID" 2>/dev/null; then
+  echo "$DISPLAY_PORT" > "$PORT_FILE"
   echo "服务已启动，PID: $SERVER_PID"
   echo "日志文件: $LOG_FILE"
   echo "访问地址: http://localhost:$DISPLAY_PORT"

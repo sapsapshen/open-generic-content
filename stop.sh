@@ -5,15 +5,32 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 RUNTIME_DIR="$ROOT_DIR/.runtime"
 PID_FILE="$RUNTIME_DIR/server.pid"
+PORT_FILE="$RUNTIME_DIR/server.port"
 DISPLAY_PORT=${PORT:-}
+PORT_SOURCE=""
 
 resolve_port() {
+  if [ -n "$DISPLAY_PORT" ]; then
+    PORT_SOURCE="env"
+  fi
+
   if [ -z "$DISPLAY_PORT" ] && [ -f "$ROOT_DIR/.env" ]; then
     DISPLAY_PORT=$(sed -n 's/^PORT=//p' "$ROOT_DIR/.env" | tail -n 1 | tr -d '"' | tr -d "'" | tr -d ' ')
+    if [ -n "$DISPLAY_PORT" ]; then
+      PORT_SOURCE="dotenv"
+    fi
+  fi
+
+  if [ -z "$DISPLAY_PORT" ] && [ -f "$PORT_FILE" ]; then
+    DISPLAY_PORT=$(cat "$PORT_FILE" 2>/dev/null | tr -d ' ')
+    if [ -n "$DISPLAY_PORT" ]; then
+      PORT_SOURCE="portfile"
+    fi
   fi
 
   if [ -z "$DISPLAY_PORT" ]; then
     DISPLAY_PORT=3000
+    PORT_SOURCE="default"
   fi
 }
 
