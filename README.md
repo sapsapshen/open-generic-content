@@ -4,7 +4,7 @@
 
 默认配置优先使用中国大陆可稳定访问的模型供应商：文本链路为 DeepSeek，图像链路为阿里百炼 `wanx2.1-t2i-turbo`，并保留硅基流动作备用选项。
 
-![丹青词境首页总览](./89050d62-b104-41c0-94b2-51bd367d6715.png)
+<img width="2313" height="1287" alt="56da4ddd-c0c6-408b-88f2-9f402da9d44b" src="https://github.com/user-attachments/assets/67db7feb-b90b-4c12-819e-4c25849dcbd1" />
 
 ## 核心能力
 
