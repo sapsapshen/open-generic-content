@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>丹青词境</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <div class="site-backdrop site-backdrop-ink"></div>
+      <div class="site-backdrop site-backdrop-wash"></div>
+
+      <header class="masthead panel-surface">
+        <div class="masthead-copy">
+          <p class="eyebrow">Literati Style Atelier</p>
+          <h1>丹青词境</h1>
+          <p class="hero-text">
+            一个把画意与诗意放在同一张工作台上的创作界面。你可以上传样本、调用名家预设、联网抓取代表作，再用一句提示词，生成新的图像与新诗。
+          </p>
+          <div class="hero-pills">
+            <span>样本学习</span>
+            <span>名家预设</span>
+            <span>联网代表作</span>
+            <span>历史与模板</span>
+          </div>
+        </div>
+
+        <div class="masthead-stage">
+          <div class="stage-orb stage-orb-sun"></div>
+          <div class="stage-orb stage-orb-moon"></div>
+          <div class="stage-ridge"></div>
+          <div class="stage-panel panel-surface panel-surface-dark">
+            <p class="panel-kicker">创作流程</p>
+            <ol class="stage-steps">
+              <li>选定风格来源</li>
+              <li>补充提示与样本</li>
+              <li>生成图像或诗篇</li>
+            </ol>
+          </div>
+        </div>
+      </header>
+
+      <main class="atelier-layout">
+        <aside class="atelier-sidebar panel-surface">
+          <div class="sidebar-section">
+            <p class="panel-kicker">模式</p>
+            <div class="mode-switch" aria-label="模式切换">
+              <button class="mode-chip is-active" data-mode-tab="image">
+                <span class="mode-chip-title">图像生成</span>
+                <span class="mode-chip-note">学习画风后生成新画面</span>
+              </button>
+              <button class="mode-chip" data-mode-tab="poem">
+                <span class="mode-chip-title">诗词生成</span>
+                <span class="mode-chip-note">学习诗风后生成新诗词</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="sidebar-section sidebar-guidance">
+            <p class="panel-kicker">使用提示</p>
+            <div class="guidance-card">
+              <strong>1. 建立风格底稿</strong>
+              <span>用预设、样本或联网人物，为本次创作指定明确气质。</span>
+            </div>
+            <div class="guidance-card">
+              <strong>2. 把提示词写具体</strong>
+              <span>尽量写清题材、氛围、时间、色调或意象，生成会更稳。</span>
+            </div>
+            <div class="guidance-card">
+              <strong>3. 保存可复用成果</strong>
+              <span>满意的组合可以直接存成模板，后续继续扩写和重绘。</span>
+            </div>
+          </div>
+
+          <div class="sidebar-section sidebar-facts">
+            <p class="panel-kicker">工作台特性</p>
+            <div class="fact-list">
+              <div class="fact-item">
+                <strong>双模态</strong>
+                <span>图像与诗词共用一套学习式工作流。</span>
+              </div>
+              <div class="fact-item">
+                <strong>动态参考</strong>
+                <span>候选人物与代表作可直接切换，不必离开当前页面。</span>
+              </div>
+              <div class="fact-item">
+                <strong>回看机制</strong>
+                <span>生成结果、模板和历史都在同一视图内闭环管理。</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <section class="atelier-main">
+          <div class="panel-surface workbench-panel">
+            <div class="panel-head panel-head-wide">
+              <div>
+                <p class="panel-kicker">输入区</p>
+                <h2>风格编排台</h2>
+              </div>
+              <p class="panel-note">从风格来源、样本材料到提示词，按同一条创作路径完成设置。</p>
+            </div>
+
+            <div class="mode-panel is-active" data-mode-panel="image">
+              <div class="workflow-grid">
+                <section class="section-card">
+                  <div class="section-card-head">
+                    <div>
+                      <span class="section-index">01</span>
+                      <label>内置绘画、动画与世界风格</label>
+                    </div>
+                    <p>可直接选择绘画大师、动画大师或国际经典视觉风格。</p>
+                  </div>
+                  <div class="preset-grid" id="image-presets"></div>
+                </section>
+
+                <section class="section-card">
+                  <div class="section-card-head">
+                    <div>
+                      <span class="section-index">02</span>
+                      <label for="image-lookup-name">联网搜索画家与代表作</label>
+                    </div>
+                    <p>输入人物姓名后，系统会返回候选人物与代表作摘要。</p>
+                  </div>
+                  <div class="search-row">
+                    <input id="image-lookup-name" type="text" placeholder="例如：梵高、莫奈、齐白石" />
+                    <div class="search-actions">
+                      <button id="image-lookup-search" class="secondary-button">联网检索</button>
+                      <button id="image-lookup-clear" class="ghost-button">清除</button>
+                    </div>
+                  </div>
+                  <div class="lookup-result" id="image-lookup-result"></div>
+                </section>
+
+                <section class="section-card section-card-wide">
+                  <div class="section-head-inline">
+                    <div>
+                      <span class="section-index">03</span>
+                      <label>已保存图像风格模板</label>
+                    </div>
+                    <button id="clear-image-templates" class="mini-button">清空模板</button>
+                  </div>
+                  <div class="library-list" id="image-template-list"></div>
+                </section>
+
+                <section class="section-card">
+                  <div class="section-card-head">
+                    <div>
+                      <span class="section-index">04</span>
+                      <label for="image-upload">上传参考图片</label>
+                    </div>
+                    <p>系统会从样本中提取色彩、纹理、明暗与构图倾向。</p>
+                  </div>
+                  <div class="upload-box">
+                    <input id="image-upload" type="file" accept="image/*" multiple />
+                    <p>支持多张图片叠加学习，适合补充笔触、质感或取景偏好。</p>
+                  </div>
+                  <div id="image-upload-list" class="upload-list"></div>
+                </section>
+
+                <section class="section-card section-card-accent">
+                  <div class="section-card-head">
+                    <div>
+                      <span class="section-index">05</span>
+                      <label for="image-prompt">图像提示词</label>
+                    </div>
+                    <p>把主体、场景、光线和情绪写进同一句提示里。</p>
+                  </div>
+                  <textarea
+                    id="image-prompt"
+                    rows="6"
+                    placeholder="例如：秋夜江畔，一轮明月照着远山与渔火，整体要有奔涌笔触与深青金色调"
+                  ></textarea>
+                  <div class="action-row">
+                    <button id="generate-image" class="primary-button">生成新图片</button>
+                    <button id="download-image" class="secondary-button" disabled>导出 PNG</button>
+                    <button id="save-image-template" class="ghost-button">保存为模板</button>
+                  </div>
+                </section>
+              </div>
+
+              <div class="style-summary style-summary-wide" id="image-style-summary"></div>
+            </div>
+
+            <div class="mode-panel" data-mode-panel="poem">
+              <div class="workflow-grid">
+                <section class="section-card">
+                  <div class="section-card-head">
+                    <div>
+                      <span class="section-index">01</span>
+                      <label>内置中外诗人风格</label>
+                    </div>
+                    <p>覆盖中文、英文、法文与日文诗风，海外诗作会自动附中文翻译。</p>
+                  </div>
+                  <div class="preset-grid" id="poet-presets"></div>
+                </section>
+
+                <section class="section-card">
+                  <div class="section-card-head">
+                    <div>
+                      <span class="section-index">02</span>
+                      <label for="poem-lookup-name">联网搜索诗词人与代表作</label>
+                    </div>
+                    <p>可直接点选候选人物，加载其代表作作为新参考。</p>
+                  </div>
+                  <div class="search-row">
+                    <input id="poem-lookup-name" type="text" placeholder="例如：李白、Dickinson、Baudelaire、芭蕉" />
+                    <div class="search-actions">
+                      <button id="poem-lookup-search" class="secondary-button">联网检索</button>
+                      <button id="poem-lookup-clear" class="ghost-button">清除</button>
+                    </div>
+                  </div>
+                  <div class="lookup-result" id="poem-lookup-result"></div>
+                </section>
+
+                <section class="section-card section-card-wide">
+                  <div class="section-head-inline">
+                    <div>
+                      <span class="section-index">03</span>
+                      <label>已保存诗风模板</label>
+                    </div>
+                    <button id="clear-poem-templates" class="mini-button">清空模板</button>
+                  </div>
+                  <div class="library-list" id="poem-template-list"></div>
+                </section>
+
+                <section class="section-card">
+                  <div class="section-card-head">
+                    <div>
+                      <span class="section-index">04</span>
+                      <label for="poem-upload">上传诗词文本</label>
+                    </div>
+                    <p>系统会提取句长节奏、常见意象和语言姿态。</p>
+                  </div>
+                  <div class="upload-box">
+                    <input id="poem-upload" type="file" accept=".txt,.md,.text" multiple />
+                    <p>多份样本会共同参与学习，适合建立更稳定的语气与章法。</p>
+                  </div>
+                  <div id="poem-upload-list" class="upload-list"></div>
+                </section>
+
+                <section class="section-card section-card-accent">
+                  <div class="section-card-head">
+                    <div>
+                      <span class="section-index">05</span>
+                      <label for="poem-prompt">诗词提示词</label>
+                    </div>
+                    <p>提示题意、季节、人物或情绪，能让新作更贴近你的预期。</p>
+                  </div>
+                  <textarea
+                    id="poem-prompt"
+                    rows="6"
+                    placeholder="例如：写一首关于春雨、归舟与故人的短诗；若选择海外诗人，请按其语言创作并附中文翻译"
+                  ></textarea>
+                  <div class="action-row">
+                    <button id="generate-poem" class="primary-button">生成新诗词</button>
+                    <button id="copy-poem" class="secondary-button" disabled>复制文本</button>
+                    <button id="save-poem-template" class="ghost-button">保存为模板</button>
+                  </div>
+                </section>
+              </div>
+
+              <div class="style-summary style-summary-wide" id="poem-style-summary"></div>
+            </div>
+          </div>
+
+          <div class="panel-surface output-stage">
+            <div class="panel-head panel-head-wide">
+              <div>
+                <p class="panel-kicker">输出区</p>
+                <h2>作品与解读</h2>
+              </div>
+              <p class="panel-note">在同一视图中查看成品、风格归纳与可追溯历史。</p>
+            </div>
+
+            <div class="mode-panel is-active" data-output-panel="image">
+              <div class="result-stage">
+                <div class="image-output" id="image-output">
+                  <div class="empty-state">
+                    <strong>等待生成图片</strong>
+                    <span>图像完成后会在这里呈现，同时保留清晰的作品展示比例。</span>
+                  </div>
+                </div>
+                <div class="insight-card" id="image-insight-card">
+                  <h3>图像风格解读</h3>
+                  <p>尚未生成。选择画家预设或上传图片后，系统会显示本次学习到的风格摘要。</p>
+                </div>
+              </div>
+              <div class="history-block history-block-wide">
+                <div class="history-head">
+                  <div>
+                    <h3>图片生成历史</h3>
+                    <p>保留缩略图回看与二次导出入口，便于快速比对构图与色调。</p>
+                  </div>
+                  <button id="clear-image-history" class="mini-button">清空历史</button>
+                </div>
+                <div class="history-gallery" id="image-history-list"></div>
+              </div>
+            </div>
+
+            <div class="mode-panel" data-output-panel="poem">
+              <div class="result-stage">
+                <article class="poem-output" id="poem-output">
+                  <div class="empty-state">
+                    <strong>等待生成诗词</strong>
+                    <span>标题与正文会以更适合阅读的版式排布在这里。</span>
+                  </div>
+                </article>
+                <div class="insight-card" id="poem-insight-card">
+                  <h3>诗风解读</h3>
+                  <p>尚未生成。选择词人预设或上传诗词后，系统会总结意象、节奏和语气。</p>
+                </div>
+              </div>
+              <div class="history-block history-block-wide">
+                <div class="history-head">
+                  <div>
+                    <h3>诗词生成历史</h3>
+                    <p>最近作品会按标题、正文摘句与摘要集中展示，便于回看与比稿。</p>
+                  </div>
+                  <button id="clear-poem-history" class="mini-button">清空历史</button>
+                </div>
+                <div class="history-list" id="poem-history-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <section class="explain-grid">
+        <article class="explain-card panel-surface">
+          <p class="panel-kicker">学习机制</p>
+          <h3>样本、预设与联网人物共同决定风格边界</h3>
+          <p>
+            不是简单套模板，而是把三类参考源叠加为一份临时风格底稿：预设提供方向，样本提供细节，联网人物提供语境与代表作线索。
+          </p>
+        </article>
+        <article class="explain-card panel-surface">
+          <p class="panel-kicker">界面逻辑</p>
+          <h3>所有关键动作都停留在单屏工作流内</h3>
+          <p>
+            你无需在多个页面之间跳转。选择风格、补充参考、输入提示、查看结果、保存模板和回看历史，都围绕同一个主工作台完成。
+          </p>
+        </article>
+        <article class="explain-card panel-surface">
+          <p class="panel-kicker">输出体验</p>
+          <h3>既强调作品展示，也强调可复用性</h3>
+          <p>
+            图片支持导出与缩略图回放，诗词支持复制与历史回看；满意的组合可以直接收进模板库，形成稳定的个人创作路径。
+          </p>
+        </article>
+      </section>
+    </div>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
