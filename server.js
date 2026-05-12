@@ -378,6 +378,7 @@ async function handleGeneratePoem(request, response) {
   const preset = body.preset || {};
   const uploadedTexts = Array.isArray(body.uploadedTexts) ? body.uploadedTexts.slice(0, 10) : [];
   const lookupStyle = normalizeLookupStyle(body.lookupStyle, "poem");
+  const hasExclusiveLookupReference = Boolean(lookupStyle.name);
   const poemLanguage = normalizePoemLanguage(preset.language);
   const poemForm = detectPoemForm(
     lookupStyle.poemForm,
@@ -396,7 +397,9 @@ async function handleGeneratePoem(request, response) {
     ? uploadedTexts
         .map((item, index) => `样本 ${index + 1} (${item.name || "未命名"}):\n${String(item.content || "").slice(0, 1800)}`)
         .join("\n\n")
-    : "无用户上传文本，仅使用预设。";
+    : hasExclusiveLookupReference
+      ? "无用户上传文本，仅使用联网检索人物作为风格来源。"
+      : "无用户上传文本，仅使用预设。";
 
   const lookupBlock = lookupStyle.name
     ? [
@@ -412,7 +415,9 @@ async function handleGeneratePoem(request, response) {
       "你是一位多语言诗歌创作助手。",
       `当前目标诗歌语言：${poemLanguage.label}。`,
       `当前目标文体：${poemFormGuide.label}。`,
-      "任务：综合诗人预设、用户上传诗词样本、当前提示词，以及可能存在的人物代表作检索结果，先做风格归纳，再写一首新作。",
+      hasExclusiveLookupReference
+        ? "任务：只允许使用联网检索到的人物及其代表作作为唯一风格来源，结合用户上传诗词样本与当前提示词，先做风格归纳，再写一首新作。不得混合任何默认预设词人、其他诗人或其他艺术家的风格。"
+        : "任务：综合诗人预设、用户上传诗词样本、当前提示词，以及可能存在的人物代表作检索结果，先做风格归纳，再写一首新作。",
       poemFormGuide.systemInstruction,
       poemLanguage.code === "zh"
         ? "要求：不要抄袭输入样本的原句；保持中文诗性和凝练度；输出必须是 JSON。"
@@ -425,10 +430,17 @@ async function handleGeneratePoem(request, response) {
       {
         role: "user",
         content: [
-          `预设词人: ${preset.name || "未指定"}`,
-          `预设描述: ${preset.description || ""}`,
-          `预设语气: ${preset.tone || ""}`,
-          `预设意象: ${(preset.imagery || []).join("、")}`,
+          ...(hasExclusiveLookupReference
+            ? [
+                `唯一风格参考人物: ${lookupStyle.name}`,
+                "禁止融合默认预设词人或任何其他人物风格。",
+              ]
+            : [
+                `预设词人: ${preset.name || "未指定"}`,
+                `预设描述: ${preset.description || ""}`,
+                `预设语气: ${preset.tone || ""}`,
+                `预设意象: ${(preset.imagery || []).join("、")}`,
+              ]),
           `目标输出语言: ${poemLanguage.label}`,
           `目标输出文体: ${poemFormGuide.label}`,
           `生成要求: ${prompt}`,
@@ -443,9 +455,12 @@ async function handleGeneratePoem(request, response) {
 
   const safeLines = normalizeStringList(result.lines).slice(0, poemFormGuide.maxLines);
   const translationLines = poemLanguage.code === "zh" ? [] : normalizeStringList(result.translationLines).slice(0, 8);
+  const summary = hasExclusiveLookupReference
+    ? buildExclusiveLookupPoemSummary(lookupStyle, poemFormGuide)
+    : `${result.summary || "模型已完成诗风学习。"}${lookupStyle.name ? ` 本次额外参考了 ${lookupStyle.name} 的代表作。` : ""} 本次按${poemFormGuide.label}创作。`;
 
   sendJson(response, 200, {
-    summary: `${result.summary || "模型已完成诗风学习。"}${lookupStyle.name ? ` 本次额外参考了 ${lookupStyle.name} 的代表作。` : ""} 本次按${poemFormGuide.label}创作。`,
+    summary,
     title: result.title || "新作",
     lines: safeLines,
     translationLines,
@@ -1041,6 +1056,20 @@ function getPoemFormGuide(form, poemLanguage) {
         ? "请返回 JSON：summary 说明你学到的风格；title 是标题；lines 是 4 到 8 行正文，整体写成一首诗。"
         : `请返回 JSON：summary 用中文说明你学到的风格；title 是${poemLanguage.label}标题；lines 是 4 到 8 行${poemLanguage.label}正文；translationLines 是与正文对应的中文译文。`,
   };
+}
+
+function buildExclusiveLookupPoemSummary(lookupStyle, poemFormGuide) {
+  const workTitles = (lookupStyle.works || []).slice(0, 4).map((work) => work.title).filter(Boolean).join("、");
+  const summaryText = String(lookupStyle.summary || "").replace(/\s+/g, " ").trim();
+  const condensedSummary = summaryText ? summaryText.slice(0, 90) : "";
+  return [
+    `${lookupStyle.name} 已作为本次创作的唯一风格参考。`,
+    condensedSummary ? `人物摘要：${condensedSummary}${summaryText.length > 90 ? "..." : ""}` : "",
+    workTitles ? `参考代表作：${workTitles}。` : "",
+    `本次仅按${poemFormGuide.label}创作，不混合任何默认预设人物风格。`,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getEntityClaimIds(claims, propertyId) {

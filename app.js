@@ -523,10 +523,13 @@ function switchMode(mode) {
 }
 
 function renderPresetCards() {
+  const imageLookupActive = Boolean(state.image.lookup?.name);
+  const poemLookupActive = Boolean(state.poem.lookup?.name);
+
   dom.imagePresets.innerHTML = imagePresets
     .map(
       (preset) => `
-        <button class="preset-card ${preset.id === state.image.selectedPresetId ? "is-selected" : ""}" data-image-preset="${preset.id}">
+        <button class="preset-card ${!imageLookupActive && preset.id === state.image.selectedPresetId ? "is-selected" : ""}" data-image-preset="${preset.id}">
           <strong>${preset.name}</strong>
           <span>${preset.description}</span>
         </button>
@@ -537,7 +540,7 @@ function renderPresetCards() {
   dom.poetPresets.innerHTML = poetPresets
     .map(
       (preset) => `
-        <button class="preset-card ${preset.id === state.poem.selectedPresetId ? "is-selected" : ""}" data-poet-preset="${preset.id}">
+        <button class="preset-card ${!poemLookupActive && preset.id === state.poem.selectedPresetId ? "is-selected" : ""}" data-poet-preset="${preset.id}">
           <strong>${preset.name}</strong>
           <span>${preset.description}</span>
           <span class="preset-meta">${preset.languageLabel || getPoemLanguageLabel(preset.language)}</span>
@@ -636,6 +639,7 @@ function renderTemplateList(mode) {
 function renderImageSummary(message = "") {
   const preset = getSelectedImagePreset();
   const backendNote = state.backend.checked ? state.backend.message : "正在检测模型服务状态...";
+  const activeReferenceName = state.image.lookup?.name || preset.name;
   const lookupNote = state.image.lookup
     ? `当前已叠加联网检索参考：${state.image.lookup.name}。代表作包括 ${(state.image.lookup.works || []).slice(0, 3).map((work) => work.title).join("、") || "若干作品"}。`
     : "当前未启用联网检索参考。";
@@ -645,7 +649,7 @@ function renderImageSummary(message = "") {
 
   dom.imageStyleSummary.innerHTML = `
     <h3>当前风格摘要</h3>
-    <p>${message || `${preset.name} 预设已激活。${lookupNote}${uploadNote}`}</p>
+    <p>${message || `${activeReferenceName} 风格参考已激活。${lookupNote}${uploadNote}`}</p>
     <ul>
       <li>主导情绪：${escapeHtml(preset.mood)}</li>
       <li>基础色板：${preset.palette.slice(0, 5).join("、")}</li>
@@ -657,11 +661,13 @@ function renderImageSummary(message = "") {
 
 function renderPoemSummary(message = "") {
   const preset = getSelectedPoetPreset();
-  const profile = state.poem.uploadedProfile || buildPoetryPresetProfile(preset);
+  const lookupProfile = state.poem.lookup ? buildPoetryLookupProfile(state.poem.lookup) : null;
+  const profile = lookupProfile || state.poem.uploadedProfile || buildPoetryPresetProfile(preset);
   const imagery = profile.imagery?.length ? profile.imagery : preset.imagery || [];
   const backendNote = state.backend.checked ? state.backend.message : "正在检测模型服务状态...";
+  const activeReferenceName = state.poem.lookup?.name || preset.name;
   const lookupNote = state.poem.lookup
-    ? `当前已叠加联网检索参考：${state.poem.lookup.name}。代表作包括 ${(state.poem.lookup.works || []).slice(0, 4).map((work) => work.title).join("、") || "若干作品"}。`
+    ? `当前仅使用联网检索人物 ${state.poem.lookup.name} 作为风格参考。代表作包括 ${(state.poem.lookup.works || []).slice(0, 4).map((work) => work.title).join("、") || "若干作品"}。`
     : "当前未启用联网检索参考。";
   const uploadNote = state.poem.uploadedTexts.length
     ? `另有 ${state.poem.uploadedTexts.length} 份本地诗词样本会一起送入模型。`
@@ -669,10 +675,10 @@ function renderPoemSummary(message = "") {
 
   dom.poemStyleSummary.innerHTML = `
     <h3>当前诗风摘要</h3>
-    <p>${message || `${preset.name} 预设已激活。${lookupNote}${uploadNote}`}</p>
+    <p>${message || `${activeReferenceName} 风格参考已激活。${lookupNote}${uploadNote}`}</p>
     <ul>
-      <li>整体语气：${escapeHtml(preset.tone)}</li>
-      <li>输出语言：${escapeHtml(preset.languageLabel || getPoemLanguageLabel(preset.language))}${preset.language === "zh" ? "" : "，并附中文翻译"}</li>
+      <li>整体语气：${escapeHtml(profile.tone || preset.tone)}</li>
+      <li>输出语言：${escapeHtml(getPoemLanguageLabel(profile.language || preset.language || "zh"))}${(profile.language || preset.language) === "zh" ? "" : "，并附中文翻译"}</li>
       <li>高频意象：${escapeHtml(imagery.slice(0, 6).join("、"))}</li>
       <li>推荐节奏：约 ${escapeHtml(String(profile.lineLength))} ${escapeHtml(profile.lineUnit || "字")}，建议行数：${escapeHtml(String(profile.lineCount))} 行</li>
       <li>模型状态：${escapeHtml(backendNote)}</li>
@@ -695,7 +701,7 @@ function renderImageHistory() {
             <img src="${escapeAttribute(item.imageUrl)}" alt="${escapeAttribute(item.prompt || item.title || "历史图片")}" />
             <div class="history-copy">
               <strong>${escapeHtml(truncateText(item.prompt || "未命名作品", 16))}</strong>
-              <div class="history-caption">${escapeHtml(item.presetName || "风格参考")} · ${escapeHtml(formatTime(item.createdAt))}</div>
+              <div class="history-caption">${escapeHtml(item.lookupName || item.presetName || "风格参考")} · ${escapeHtml(formatTime(item.createdAt))}</div>
             </div>
           </button>
         </div>
@@ -717,7 +723,7 @@ function renderPoemHistory() {
           <button class="history-delete" data-poem-history-delete="${item.id}">删除</button>
           <button class="poem-history-item" data-poem-history-id="${item.id}">
             <strong>${escapeHtml(item.title || "未命名")}</strong>
-            <div class="poem-history-meta">${escapeHtml(item.presetName || "风格参考")} · ${escapeHtml(getPoemLanguageLabel(item.language || "zh"))} · ${escapeHtml(formatTime(item.createdAt))}</div>
+            <div class="poem-history-meta">${escapeHtml(item.lookupName || item.presetName || "风格参考")} · ${escapeHtml(getPoemLanguageLabel(item.language || "zh"))} · ${escapeHtml(formatTime(item.createdAt))}</div>
             <div class="poem-history-lines">${escapeHtml((item.lines || []).slice(0, 2).join(" / "))}</div>
           </button>
         </div>
@@ -814,10 +820,12 @@ async function lookupStyle(mode, entityId) {
     if (switched) {
       state[mode].lookupCandidates = [];
       state[mode].lookup = null;
+      renderPresetCards();
       renderLookupResult(mode);
       switchMode(targetMode);
     }
 
+    renderPresetCards();
     renderLookupResult(targetMode);
     const selectedName = result.selected?.name || result.name;
     if (targetMode === "image") {
@@ -848,6 +856,7 @@ function renderLookupStatus(mode, message) {
 function clearLookup(mode) {
   state[mode].lookupCandidates = [];
   state[mode].lookup = null;
+  renderPresetCards();
   if (mode === "image") {
     dom.imageLookupName.value = "";
     renderLookupResult("image");
@@ -1040,7 +1049,7 @@ async function onGenerateImage() {
       summary: state.image.generatedSummary,
       createdAt: new Date().toISOString(),
       presetName: getSelectedImagePreset().name,
-      lookupName: state.image.lookup?.name || "",
+      lookupName: state.image.lookup?.name || getSelectedImagePreset().name,
     });
     commitGeneratedImage();
   } catch (error) {
@@ -1093,7 +1102,7 @@ async function onGeneratePoem() {
       summary: state.poem.generatedSummary,
       createdAt: new Date().toISOString(),
       presetName: getSelectedPoetPreset().name,
-      lookupName: state.poem.lookup?.name || "",
+      lookupName: state.poem.lookup?.name || getSelectedPoetPreset().name,
     });
     commitGeneratedPoem({
       title: result.title || "未命名",
@@ -1216,11 +1225,95 @@ function resetPoemUploads() {
 
 function buildPoetryPresetProfile(preset) {
   return {
+    tone: preset.tone || "",
     imagery: preset.imagery || [],
+    language: preset.language || "zh",
     lineLength: preset.defaultLineLength || 7,
     lineCount: 4,
     lineUnit: preset.lineUnit || "字",
   };
+}
+
+function buildPoetryLookupProfile(lookup) {
+  const text = [lookup.name, lookup.description, lookup.summary, ...(lookup.works || []).map((work) => `${work.title} ${work.description || ""} ${work.summary || ""}`)]
+    .filter(Boolean)
+    .join("\n");
+  const poemForm = normalizePoemForm(lookup.poemForm || "");
+  const imagery = extractLookupImagery(text);
+  const language = detectLookupPoemLanguage(lookup);
+
+  return {
+    tone: detectLookupTone(text, poemForm),
+    imagery,
+    language,
+    lineLength: poemForm === "haiku" ? 5 : poemForm === "ci" ? 8 : language === "en" || language === "fr" ? 6 : 7,
+    lineCount: poemForm === "haiku" ? 3 : poemForm === "ci" ? 8 : 4,
+    lineUnit: poemForm === "haiku" || language === "ja" ? "短句" : language === "en" || language === "fr" ? "词" : "字",
+  };
+}
+
+function detectLookupTone(source, poemForm) {
+  const text = String(source || "");
+  const toneRules = [
+    { terms: ["婉约", "离情", "羁旅", "慢词", "长亭", "春愁", "别绪"], tone: "婉约" },
+    { terms: ["豪放", "雄放", "奔涌", "纵酒", "高歌"], tone: "豪放" },
+    { terms: ["清寂", "静寂", "极简", "顿悟", "旅途"], tone: "清寂" },
+    { terms: ["内省", "灵魂", "静默", "死亡", "震颤"], tone: "内省" },
+    { terms: ["颓艳", "都市感官", "夜色", "阴影", "香气"], tone: "颓艳" },
+    { terms: ["沉郁", "苍凉", "家国", "秋江", "身世"], tone: "沉郁" },
+  ];
+
+  const matched = toneRules.find((rule) => rule.terms.some((term) => text.includes(term)));
+  if (matched) {
+    return matched.tone;
+  }
+  if (poemForm === "ci") {
+    return "婉约";
+  }
+  if (poemForm === "haiku") {
+    return "清寂";
+  }
+  return "诗性";
+}
+
+function extractLookupImagery(source) {
+  const vocabulary = [
+    ...Object.values(poetryVocabulary).flat(),
+    "寒蝉", "长亭", "秋江", "羁旅", "离情", "危楼", "春愁", "湖山", "旅途", "夜色", "香气", "街道", "自然", "静寂",
+  ];
+  const counts = new Map();
+  vocabulary.forEach((word) => {
+    counts.set(word, String(source || "").split(word).length - 1);
+  });
+
+  const topImagery = [...counts.entries()]
+    .filter(([, count]) => count > 0)
+    .sort((left, right) => right[1] - left[1])
+    .map(([word]) => word)
+    .slice(0, 8);
+
+  return topImagery.length ? topImagery : ["风物", "行旅", "情思"];
+}
+
+function detectLookupPoemLanguage(lookup) {
+  const text = [lookup.name, lookup.description, lookup.summary, ...(lookup.works || []).map((work) => `${work.title} ${work.description || ""} ${work.summary || ""}`)]
+    .filter(Boolean)
+    .join(" ");
+  const hasCjkName = /[\u4e00-\u9fff]/.test(String(lookup.name || ""));
+
+  if (/日本|俳人|俳句|[\u3040-\u30ff]/.test(text)) {
+    return "ja";
+  }
+  if (/French|法文|法国|fran[çc]ais/i.test(text)) {
+    return "fr";
+  }
+  if (hasCjkName) {
+    return "zh";
+  }
+  if (/American|English|英文|英国|美国|British|US|U\.S\./i.test(text) && /[A-Za-z]/.test(text)) {
+    return "en";
+  }
+  return "zh";
 }
 
 function analyzePoetryCorpus(texts) {
