@@ -29,7 +29,7 @@ resolve_port() {
   fi
 
   if [ -z "$DISPLAY_PORT" ]; then
-    DISPLAY_PORT=3000
+    DISPLAY_PORT=3017
     PORT_SOURCE="default"
   fi
 }

@@ -1,23 +1,24 @@
 import { createServer } from "node:http";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 loadEnvFile(path.join(__dirname, ".env"));
 
-const PORT = Number(process.env.PORT || 3000);
+const portResolution = readPort(process.env.PORT, 3017);
+const PORT = typeof portResolution === "number" ? portResolution : 3017;
 const LEGACY_OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const LEGACY_OPENAI_BASE_URL = trimTrailingSlash(process.env.OPENAI_BASE_URL || "");
 const PROVIDER_PRESETS = {
   deepseek: {
     label: "DeepSeek",
-    textBaseUrl: "https://api.deepseek.com/v1",
-    defaultTextModel: "deepseek-chat",
+    textBaseUrl: "https://api.deepseek.com",
+    defaultTextModel: "deepseek-flash",
   },
   siliconflow: {
     label: "SiliconFlow",
@@ -31,14 +32,14 @@ const PROVIDER_PRESETS = {
     textBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     imageBaseUrl: "https://dashscope.aliyuncs.com",
     defaultTextModel: "qwen-plus",
-    defaultImageModel: "wanx2.1-t2i-turbo",
+    defaultImageModel: "wan2.2-t2i-flash",
   },
   custom: {
     label: "Custom",
   },
 };
 const TEXT_PROVIDER = normalizeProviderName(process.env.TEXT_PROVIDER || inferLegacyProvider());
-const IMAGE_PROVIDER = normalizeProviderName(process.env.IMAGE_PROVIDER || inferLegacyProvider("siliconflow"));
+const IMAGE_PROVIDER = normalizeProviderName(process.env.IMAGE_PROVIDER || inferLegacyProvider("bailian"));
 const TEXT_API_KEY = process.env.TEXT_API_KEY || resolveProviderApiKey(TEXT_PROVIDER) || LEGACY_OPENAI_API_KEY;
 const IMAGE_API_KEY = process.env.IMAGE_API_KEY || resolveProviderApiKey(IMAGE_PROVIDER) || LEGACY_OPENAI_API_KEY;
 const TEXT_BASE_URL = resolveProviderBaseUrl("text", TEXT_PROVIDER, process.env.TEXT_BASE_URL, LEGACY_OPENAI_BASE_URL);
@@ -50,10 +51,22 @@ const IMAGE_ENDPOINT_PATH = normalizeEndpointPath(
   process.env.IMAGE_ENDPOINT_PATH || (IMAGE_PROVIDER === "bailian" ? "/api/v1/services/aigc/text2image/image-synthesis" : "/images/generations")
 );
 const REQUEST_TIMEOUT_MS = 15000;
+const MODEL_TIMEOUT_MS = 90000;
+const IMAGE_DOWNLOAD_TIMEOUT_MS = 30000;
 const LOOKUP_CACHE_TTL_MS = 1000 * 60 * 60;
 const LOOKUP_CACHE_MAX_ENTRIES = 200;
 const BAILIAN_IMAGE_MAX_POLLS = 20;
 const BAILIAN_IMAGE_POLL_INTERVAL_MS = 2000;
+const MAX_JSON_BODY_CHARS = 25 * 1024 * 1024;
+const MAX_IMAGE_DATA_URL_CHARS = 6_000_000;
+const EXTERNAL_USER_AGENT = "DanqingStyleVerse/1.0 (style atelier; +https://github.com/sapsapshen/open-generic-content)";
+const PUBLIC_FILE_EXTENSIONS = new Set([".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".webp", ".gif"]);
+const BLOCKED_PUBLIC_FILES = new Set(["server.js"]);
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "SAMEORIGIN",
+};
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -188,6 +201,7 @@ const server = createServer(async (request, response) => {
         imageProvider: getProviderLabel(IMAGE_PROVIDER),
         textModel: TEXT_MODEL,
         imageModel: IMAGE_MODEL,
+        textSupportsVision: textModelAcceptsImages(TEXT_PROVIDER, TEXT_MODEL, process.env.TEXT_SUPPORTS_VISION),
         message:
           textReady && imageReady
             ? `模型服务可用。文本供应商：${getProviderLabel(TEXT_PROVIDER)}；图片供应商：${getProviderLabel(IMAGE_PROVIDER)}。`
@@ -218,14 +232,59 @@ const server = createServer(async (request, response) => {
 
     sendJson(response, 405, { error: "Method not allowed" });
   } catch (error) {
-    console.error(error);
-    sendJson(response, 500, { error: error.message || "Internal server error" });
+    if (response.headersSent) {
+      return;
+    }
+    const statusCode = Number.isInteger(error.statusCode) ? error.statusCode : 500;
+    if (!Number.isInteger(error.statusCode)) {
+      console.error(error);
+    } else if (statusCode >= 500) {
+      console.error(error.message);
+    }
+    sendJson(response, statusCode, { error: error.message || "Internal server error" });
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`丹青词境已启动: http://localhost:${PORT}`);
-});
+function isDirectRun() {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+  return pathToFileURL(path.resolve(entry)).href === import.meta.url;
+}
+
+export function startServer(port = PORT) {
+  if (portResolution && typeof portResolution === "object") {
+    const error = new Error(`PORT 无效：${portResolution.raw}`);
+    error.code = "ERR_INVALID_PORT";
+    return Promise.reject(error);
+  }
+
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      if (error?.code === "EADDRINUSE") {
+        reject(new Error(`端口 ${port} 已被占用。`));
+        return;
+      }
+      reject(error);
+    };
+    server.once("error", onError);
+    server.listen(port, () => {
+      server.off("error", onError);
+      const address = server.address();
+      const activePort = typeof address === "object" && address ? address.port : port;
+      console.log(`丹青词境已启动: http://localhost:${activePort}`);
+      resolve(server);
+    });
+  });
+}
+
+if (isDirectRun()) {
+  startServer().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });
+}
 
 async function handleStyleLookup(request, response) {
   const body = await readJsonBody(request);
@@ -296,15 +355,19 @@ async function handleGenerateImage(request, response) {
   const body = await readJsonBody(request);
   const prompt = String(body.prompt || "").trim();
   const preset = body.preset || {};
-  const uploadedImages = Array.isArray(body.uploadedImages) ? body.uploadedImages.slice(0, 4) : [];
+  const uploadedImages = normalizeUploadedImages(body.uploadedImages);
+  const colorHints = normalizeColorHints(body.colorHints);
   const lookupStyle = normalizeLookupStyle(body.lookupStyle, "image");
+  const acceptsImages = textModelAcceptsImages(TEXT_PROVIDER, TEXT_MODEL, process.env.TEXT_SUPPORTS_VISION);
 
   if (!prompt) {
     sendJson(response, 400, { error: "图像提示词不能为空。" });
     return;
   }
 
-  const lookupImages = lookupStyle.works.filter((work) => work.imageUrl).slice(0, 3);
+  const lookupImages = acceptsImages
+    ? lookupStyle.works.filter((work) => isFetchableImageUrl(work.imageUrl)).slice(0, 3)
+    : [];
   const content = [
     {
       type: "text",
@@ -320,15 +383,25 @@ async function handleGenerateImage(request, response) {
         lookupStyle.name
           ? `联网参考人物: ${lookupStyle.name}\n人物摘要: ${lookupStyle.summary}\n代表作: ${lookupStyle.works.map((work) => `${work.title}${work.summary ? `(${work.summary})` : ""}`).join("；")}`
           : "未启用联网参考。",
+        uploadedImages.length
+          ? acceptsImages
+            ? `用户上传了 ${uploadedImages.length} 张参考图，请结合图像内容与文字描述抽取风格。`
+            : `用户上传了 ${uploadedImages.length} 张参考图。当前文本模型不能直接读取图像，请依据采样主色、预设和提示词归纳风格。`
+          : "未上传参考图片。",
+        colorHints.length ? `本地采样主色: ${colorHints.join(", ")}` : "",
         `用户生成目标: ${prompt}`,
-      ].join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n"),
     },
-    ...uploadedImages.map((image) => ({
-      type: "image_url",
-      image_url: {
-        url: image.dataUrl,
-      },
-    })),
+    ...(acceptsImages
+      ? uploadedImages.map((image) => ({
+          type: "image_url",
+          image_url: {
+            url: image.dataUrl,
+          },
+        }))
+      : []),
     ...lookupImages.map((work) => ({
       type: "image_url",
       image_url: {
@@ -339,7 +412,10 @@ async function handleGenerateImage(request, response) {
 
   const styleProfile = normalizeVisualStyleProfile(
     await callChatJson({
-    system: "You analyze visual styles and must return valid JSON only.",
+    system: [
+      "You analyze visual styles and must return valid JSON only.",
+      'Example: {"styleSummary":"swirling blue and gold","visualKeywords":["impasto"],"colorPalette":["#163d63"],"composition":["spiral sky"],"brushwork":["thick strokes"],"mood":"turbulent"}',
+    ].join("\n"),
     messages: [{ role: "user", content }],
     temperature: 0.45,
     })
@@ -362,7 +438,14 @@ async function handleGenerateImage(request, response) {
     .filter(Boolean)
     .join("\n");
 
-  const imageResult = await callImageGeneration(finalPrompt);
+  const bailianPrompt = buildCompactImagePrompt({
+    prompt,
+    presetName: preset.name || "",
+    lookupName: lookupStyle.name || "",
+    styleProfile,
+    limit: imagePromptCharacterLimit(IMAGE_PROVIDER, IMAGE_MODEL),
+  });
+  const imageResult = await callImageGeneration(finalPrompt, bailianPrompt);
   sendJson(response, 200, {
     imageDataUrl: imageResult.imageDataUrl,
     mimeType: imageResult.mimeType,
@@ -425,6 +508,9 @@ async function handleGeneratePoem(request, response) {
       poemLanguage.code === "zh"
         ? `JSON 字段必须为 summary, title, lines。lines 必须是字符串数组。${poemFormGuide.jsonInstruction}`
         : `JSON 字段必须为 summary, title, lines, translationLines。lines 和 translationLines 都必须是字符串数组，并尽量逐行对应。${poemFormGuide.jsonInstruction}`,
+      poemLanguage.code === "zh"
+        ? '示例：{"summary":"清旷","title":"春江","lines":["一行","二行"]}'
+        : '示例：{"summary":"清旷","title":"Spring","lines":["line"],"translationLines":["一行"]}',
     ].join("\n"),
     messages: [
       {
@@ -485,20 +571,47 @@ function normalizePoemLanguage(language) {
 }
 
 async function callChatJson({ system, messages, temperature }) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await requestChatCompletion({ system, messages, temperature, jsonMode: attempt === 0 });
+    } catch (error) {
+      lastError = error;
+      const message = String(error?.message || "");
+      const retryable = /response_format|json_object|未返回可解析 JSON|unsupported/i.test(message);
+      if (!retryable || attempt === 1) {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function requestChatCompletion({ system, messages, temperature, jsonMode }) {
   const endpoint = joinUrl(TEXT_BASE_URL, TEXT_ENDPOINT_PATH);
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${TEXT_API_KEY}`,
+  const response = await fetchWithTimeout(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${TEXT_API_KEY}`,
+      },
+      body: JSON.stringify(
+        buildChatRequestBody({
+          model: TEXT_MODEL,
+          provider: TEXT_PROVIDER,
+          temperature,
+          system,
+          messages,
+          jsonMode,
+        })
+      ),
     },
-    body: JSON.stringify({
-      model: TEXT_MODEL,
-      temperature,
-      response_format: { type: "json_object" },
-      messages: [{ role: "system", content: system }, ...messages],
-    }),
-  });
+    MODEL_TIMEOUT_MS,
+    "文本模型请求超时，请稍后重试。",
+    "无法连接文本模型，请检查网络、TEXT_BASE_URL 与密钥。"
+  );
 
   const payload = await readApiPayload(response);
   if (!response.ok) {
@@ -509,20 +622,26 @@ async function callChatJson({ system, messages, temperature }) {
   return parseJsonContent(content);
 }
 
-async function callImageGeneration(prompt) {
+async function callImageGeneration(prompt, bailianPrompt = prompt) {
   if (IMAGE_PROVIDER === "bailian") {
-    return callBailianImageGeneration(prompt);
+    return callBailianImageGeneration(bailianPrompt);
   }
 
   const endpoint = joinUrl(IMAGE_BASE_URL, IMAGE_ENDPOINT_PATH);
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${IMAGE_API_KEY}`,
+  const response = await fetchWithTimeout(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${IMAGE_API_KEY}`,
+      },
+      body: JSON.stringify(buildImageRequestBody(prompt)),
     },
-    body: JSON.stringify(buildImageRequestBody(prompt)),
-  });
+    MODEL_TIMEOUT_MS,
+    "图片模型请求超时，请稍后重试。",
+    "无法连接图片模型，请检查网络、IMAGE_BASE_URL 与密钥。"
+  );
 
   const payload = await readApiPayload(response);
   if (!response.ok) {
@@ -557,23 +676,29 @@ async function callImageGeneration(prompt) {
 
 async function callBailianImageGeneration(prompt) {
   const endpoint = joinUrl(IMAGE_BASE_URL, IMAGE_ENDPOINT_PATH);
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-DashScope-Async": "enable",
-      Authorization: `Bearer ${IMAGE_API_KEY}`,
+  const response = await fetchWithTimeout(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-DashScope-Async": "enable",
+        Authorization: `Bearer ${IMAGE_API_KEY}`,
+      },
+      body: JSON.stringify(buildImageRequestBody(prompt)),
     },
-    body: JSON.stringify(buildImageRequestBody(prompt)),
-  });
+    MODEL_TIMEOUT_MS,
+    "图片模型请求超时，请稍后重试。",
+    "无法连接图片模型，请检查网络、IMAGE_BASE_URL 与密钥。"
+  );
 
   const payload = await readApiPayload(response);
   if (!response.ok) {
     throw new Error(extractApiErrorMessage(payload, "图片模型调用失败"));
   }
 
-  const taskId = payload.output?.task_id;
-  if (!taskId) {
+  const taskId = String(payload.output?.task_id || "");
+  if (!/^[\w.-]+$/.test(taskId)) {
     throw new Error("百炼图片任务未返回 task_id。");
   }
 
@@ -584,12 +709,18 @@ async function pollBailianImageTask(taskId) {
   const taskUrl = joinUrl(IMAGE_BASE_URL, `/api/v1/tasks/${taskId}`);
 
   for (let attempt = 0; attempt < BAILIAN_IMAGE_MAX_POLLS; attempt += 1) {
-    const response = await fetch(taskUrl, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${IMAGE_API_KEY}`,
+    const response = await fetchWithTimeout(
+      taskUrl,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${IMAGE_API_KEY}`,
+        },
       },
-    });
+      REQUEST_TIMEOUT_MS,
+      "百炼图片任务查询超时，请稍后重试。",
+      "无法连接百炼图片任务查询接口。"
+    );
 
     const payload = await readApiPayload(response);
     if (!response.ok) {
@@ -598,9 +729,9 @@ async function pollBailianImageTask(taskId) {
 
     const status = String(payload.output?.task_status || "").toUpperCase();
     if (status === "SUCCEEDED") {
-      const item = payload.output?.results?.[0];
-      if (item?.url) {
-        const converted = await fetchBinaryAsDataUrl(item.url);
+      const imageUrl = extractBailianImageUrl(payload);
+      if (imageUrl) {
+        const converted = await fetchBinaryAsDataUrl(imageUrl);
         return {
           imageDataUrl: converted.dataUrl,
           mimeType: converted.mimeType,
@@ -609,7 +740,7 @@ async function pollBailianImageTask(taskId) {
       throw new Error("百炼图片任务成功，但未返回图片地址。");
     }
 
-    if (status === "FAILED" || status === "CANCELED") {
+    if (status === "FAILED" || status === "CANCELED" || status === "UNKNOWN") {
       throw new Error(extractApiErrorMessage(payload, "百炼图片任务执行失败"));
     }
 
@@ -629,6 +760,7 @@ function buildImageRequestBody(prompt) {
       parameters: {
         size: "1024*1024",
         n: 1,
+        prompt_extend: false,
       },
     };
   }
@@ -759,14 +891,6 @@ function buildLocalLookupPayload(name, kind, entityId) {
       styleSummary: buildLocalLookupStyleSummary(selectedEntry.lookupKind, selectedEntry),
     },
   };
-}
-
-function searchLocalStyleCandidates(name, kind) {
-  return searchLocalStyleEntries(name, kind).map((entry) => ({
-    id: entry.id,
-    name: entry.name,
-    description: entry.description,
-  }));
 }
 
 function searchLocalStyleEntries(name, kind) {
@@ -1101,7 +1225,7 @@ async function fetchJson(url, { allow404 = false } = {}) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       try {
-        const response = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "danqing-style-verse/1.0" } });
+        const response = await fetch(url, { signal: controller.signal, headers: { "User-Agent": EXTERNAL_USER_AGENT } });
         if (allow404 && response.status === 404) {
           return {};
         }
@@ -1172,39 +1296,45 @@ function pruneCacheStore(store, maxEntries) {
 }
 
 async function fetchBinaryAsDataUrl(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "danqing-style-verse/1.0" } });
-    if (!response.ok) {
-      throw new Error("远程图片下载失败");
-    }
-    const mimeType = response.headers.get("content-type") || "image/png";
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return {
-      dataUrl: `data:${mimeType};base64,${buffer.toString("base64")}`,
-      mimeType,
-    };
-  } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("图片下载超时");
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
+  if (!isFetchableImageUrl(url)) {
+    throw new Error("远程图片地址无效");
   }
+  const response = await fetchWithTimeout(
+    url,
+    { headers: { "User-Agent": EXTERNAL_USER_AGENT } },
+    IMAGE_DOWNLOAD_TIMEOUT_MS,
+    "图片下载超时",
+    "远程图片下载失败"
+  );
+  if (!response.ok) {
+    throw new Error("远程图片下载失败");
+  }
+  const mimeType = (response.headers.get("content-type") || "image/png").split(";")[0].trim();
+  if (!mimeType.startsWith("image/")) {
+    throw new Error("远程图片下载失败");
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return {
+    dataUrl: `data:${mimeType};base64,${buffer.toString("base64")}`,
+    mimeType,
+  };
 }
 
 async function serveStatic(pathname, response) {
-  const safePath = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  const filePath = path.join(__dirname, safePath);
-
-  if (!filePath.startsWith(__dirname)) {
-    sendJson(response, 403, { error: "Forbidden" });
+  const filePath = resolvePublicFile(__dirname, pathname);
+  if (!filePath) {
+    sendJson(response, 404, { error: "Not found" });
     return;
   }
 
-  if (!existsSync(filePath)) {
+  let stat;
+  try {
+    stat = statSync(filePath);
+  } catch {
+    sendJson(response, 404, { error: "Not found" });
+    return;
+  }
+  if (!stat.isFile()) {
     sendJson(response, 404, { error: "Not found" });
     return;
   }
@@ -1212,23 +1342,27 @@ async function serveStatic(pathname, response) {
   const extension = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[extension] || "application/octet-stream";
   const file = await readFile(filePath);
-  response.writeHead(200, { "Content-Type": contentType });
+  response.writeHead(200, {
+    "Content-Type": contentType,
+    "Cache-Control": "no-cache",
+    ...SECURITY_HEADERS,
+  });
   response.end(file);
 }
 
 function ensureConfigured(mode) {
   if (!TEXT_API_KEY) {
-    throw new Error("未检测到文本模型密钥，请在 .env 中填写 TEXT_API_KEY，或填写所选供应商对应的密钥。 ");
+    throw httpError("未检测到文本模型密钥，请在 .env 中填写 TEXT_API_KEY，或填写所选供应商对应的密钥。", 500);
   }
   if (!TEXT_BASE_URL || !TEXT_MODEL) {
-    throw new Error("文本模型配置不完整，请检查 TEXT_BASE_URL 与 TEXT_MODEL。");
+    throw httpError("文本模型配置不完整，请检查 TEXT_BASE_URL 与 TEXT_MODEL。", 500);
   }
   if (mode === "image") {
     if (!IMAGE_API_KEY) {
-      throw new Error("未检测到图片模型密钥，请在 .env 中填写 IMAGE_API_KEY，或填写所选供应商对应的密钥。");
+      throw httpError("未检测到图片模型密钥，请在 .env 中填写 IMAGE_API_KEY，或填写所选供应商对应的密钥。", 500);
     }
     if (!IMAGE_BASE_URL || !IMAGE_MODEL) {
-      throw new Error("图片模型配置不完整，请检查 IMAGE_BASE_URL 与 IMAGE_MODEL。");
+      throw httpError("图片模型配置不完整，请检查 IMAGE_BASE_URL 与 IMAGE_MODEL。", 500);
     }
   }
 }
@@ -1299,54 +1433,87 @@ function getProviderLabel(providerName) {
 function buildHealthMessage(textReady, imageReady) {
   const parts = [];
   if (!textReady) {
-    parts.push("文本模型未配置完成，请检查 TEXT_PROVIDER、TEXT_MODEL 和对应密钥。 ");
+    parts.push("文本模型未配置完成，请检查 TEXT_PROVIDER、TEXT_MODEL 和对应密钥。");
   }
   if (!imageReady) {
-    parts.push("图片模型未配置完成，请检查 IMAGE_PROVIDER、IMAGE_MODEL 和对应密钥。 ");
+    parts.push("图片模型未配置完成，请检查 IMAGE_PROVIDER、IMAGE_MODEL 和对应密钥。");
   }
   return parts.join("").trim();
 }
 
 function sendJson(response, statusCode, data) {
-  response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
+  response.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...SECURITY_HEADERS,
+  });
   response.end(JSON.stringify(data));
 }
 
 function readJsonBody(request) {
   return new Promise((resolve, reject) => {
     let raw = "";
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      callback(value);
+    };
+
     request.on("data", (chunk) => {
       raw += chunk;
-      if (raw.length > 25 * 1024 * 1024) {
-        reject(new Error("请求体过大，请减少上传文件数量或尺寸。"));
+      if (raw.length > MAX_JSON_BODY_CHARS) {
+        finish(reject, httpError("请求体过大，请减少上传文件数量或尺寸。", 413));
         request.destroy();
       }
     });
     request.on("end", () => {
       try {
-        resolve(raw ? JSON.parse(raw) : {});
+        finish(resolve, raw ? JSON.parse(raw) : {});
       } catch {
-        reject(new Error("请求体不是合法 JSON。"));
+        finish(reject, httpError("请求体不是合法 JSON。", 400));
       }
     });
-    request.on("error", reject);
+    request.on("error", (error) => finish(reject, error));
   });
 }
 
 function parseJsonContent(content) {
-  if (typeof content === "string") {
-    return JSON.parse(stripCodeFence(content));
+  const text = contentToText(content);
+  if (!text.trim()) {
+    throw new Error("模型未返回可解析 JSON");
   }
 
+  const stripped = stripCodeFence(text);
+  try {
+    return JSON.parse(stripped);
+  } catch {
+    const start = stripped.indexOf("{");
+    const end = stripped.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      try {
+        return JSON.parse(stripped.slice(start, end + 1));
+      } catch {
+        throw new Error("模型未返回可解析 JSON");
+      }
+    }
+    throw new Error("模型未返回可解析 JSON");
+  }
+}
+
+function contentToText(content) {
+  if (typeof content === "string") {
+    return content;
+  }
   if (Array.isArray(content)) {
-    const text = content
-      .map((item) => item.text || item.content || "")
+    return content
+      .map((item) => item?.text || item?.content || "")
       .join("")
       .trim();
-    return JSON.parse(stripCodeFence(text));
   }
-
-  throw new Error("模型未返回可解析 JSON");
+  return "";
 }
 
 function normalizeVisualStyleProfile(profile) {
@@ -1391,18 +1558,279 @@ function loadEnvFile(filePath) {
 
   const content = readFileSync(filePath, "utf8");
   for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
+    const assignment = parseEnvAssignment(rawLine);
+    if (!assignment) {
       continue;
     }
-    const separatorIndex = line.indexOf("=");
-    if (separatorIndex === -1) {
-      continue;
-    }
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim().replace(/^['"]|['"]$/g, "");
-    if (!(key in process.env)) {
-      process.env[key] = value;
+    if (!(assignment.key in process.env)) {
+      process.env[assignment.key] = assignment.value;
     }
   }
 }
+
+function httpError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+export function readPort(rawValue, fallback = 3017) {
+  if (rawValue == null || String(rawValue).trim() === "") {
+    return fallback;
+  }
+  const port = Number(String(rawValue).trim());
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return { raw: String(rawValue).trim() };
+  }
+  return port;
+}
+
+export function parseEnvAssignment(rawLine) {
+  let line = String(rawLine || "").trim();
+  if (!line || line.startsWith("#")) {
+    return null;
+  }
+  if (line.startsWith("export ")) {
+    line = line.slice("export ".length).trim();
+  }
+  const separatorIndex = line.indexOf("=");
+  if (separatorIndex <= 0) {
+    return null;
+  }
+  const key = line.slice(0, separatorIndex).trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+    return null;
+  }
+  return { key, value: parseEnvValue(line.slice(separatorIndex + 1)) };
+}
+
+export function parseEnvValue(raw) {
+  let value = String(raw ?? "").trim();
+  if ((value.startsWith('"') && value.lastIndexOf('"') > 0) || (value.startsWith("'") && value.lastIndexOf("'") > 0)) {
+    const quote = value[0];
+    const end = value.lastIndexOf(quote);
+    return value.slice(1, end);
+  }
+  const commentIndex = value.search(/\s+#/);
+  if (commentIndex !== -1) {
+    value = value.slice(0, commentIndex).trim();
+  }
+  return value;
+}
+
+export function textModelAcceptsImages(provider, model, envFlag) {
+  const flag = String(envFlag || "").trim().toLowerCase();
+  if (flag === "true" || flag === "1" || flag === "yes") {
+    return true;
+  }
+  if (flag === "false" || flag === "0" || flag === "no") {
+    return false;
+  }
+  if (provider === "deepseek") {
+    return false;
+  }
+  return /(?:^|[^a-z0-9])(?:vl|vision)(?:[^a-z0-9]|$)|gpt-4o|gpt-4\.1|gpt-5|gemini|claude|omni/i.test(String(model || ""));
+}
+
+export function buildChatRequestBody({ model, provider, temperature, system, messages, jsonMode }) {
+  const body = {
+    model,
+    temperature,
+    max_tokens: 4096,
+    messages: [{ role: "system", content: system }, ...(Array.isArray(messages) ? messages : [])],
+  };
+  if (jsonMode) {
+    body.response_format = { type: "json_object" };
+  }
+  if (provider === "deepseek") {
+    body.thinking = { type: "disabled" };
+  }
+  return body;
+}
+
+export function imagePromptCharacterLimit(provider, model) {
+  if (provider !== "bailian") {
+    return 4000;
+  }
+  if (/wan2\.[56]/i.test(String(model || ""))) {
+    return 2000;
+  }
+  return 500;
+}
+
+export function buildCompactImagePrompt({ prompt, presetName, lookupName, styleProfile, limit }) {
+  const profile = styleProfile && typeof styleProfile === "object" ? styleProfile : {};
+  const pieces = [
+    String(prompt || "").trim(),
+    String(profile.styleSummary || "").trim(),
+    normalizeStringList(profile.visualKeywords).slice(0, 6).join(", "),
+    normalizeStringList(profile.colorPalette).slice(0, 5).join(", "),
+    String(profile.mood || "").trim(),
+    presetName ? `风格 ${presetName}` : "",
+    lookupName ? `参考 ${lookupName}` : "",
+  ].filter(Boolean);
+  const max = Number.isInteger(limit) && limit > 0 ? limit : 500;
+  let result = "";
+  for (const piece of pieces) {
+    const separator = result ? "；" : "";
+    const next = `${result}${separator}${piece}`;
+    if (next.length <= max) {
+      result = next;
+      continue;
+    }
+    const room = max - result.length - separator.length;
+    if (room > 0) {
+      result = `${result}${separator}${piece.slice(0, room)}`;
+    }
+    break;
+  }
+  return result;
+}
+
+function normalizeUploadedImages(images) {
+  if (!Array.isArray(images) || images.length === 0) {
+    return [];
+  }
+  const accepted = [];
+  for (const image of images.slice(0, 4)) {
+    const dataUrl = String(image?.dataUrl || "").replace(/\s+/g, "");
+    if (!/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[a-z0-9+/=]+$/i.test(dataUrl)) {
+      continue;
+    }
+    if (dataUrl.length > MAX_IMAGE_DATA_URL_CHARS) {
+      continue;
+    }
+    accepted.push({ dataUrl });
+  }
+  if (!accepted.length) {
+    throw httpError("参考图片格式不受支持，请上传 4MB 以内的 PNG、JPEG、WEBP 或 GIF。", 400);
+  }
+  return accepted;
+}
+
+function normalizeColorHints(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => String(item || "").trim())
+    .filter((item) => /^#[0-9a-f]{6}$/i.test(item))
+    .slice(0, 8);
+}
+
+function isBlockedHostname(hostname) {
+  const host = String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
+  if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) {
+    return true;
+  }
+  if (host === "0.0.0.0" || host === "::" || host === "::1") {
+    return true;
+  }
+  const match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!match) {
+    return false;
+  }
+  const octets = match.slice(1).map(Number);
+  if (octets.some((octet) => octet > 255)) {
+    return true;
+  }
+  const [first, second] = octets;
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function isFetchableImageUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || ""));
+  } catch {
+    return false;
+  }
+  if (url.username || url.password) {
+    return false;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return false;
+  }
+  return !isBlockedHostname(url.hostname);
+}
+
+function extractBailianImageUrl(payload) {
+  const direct = payload?.output?.results?.[0]?.url;
+  if (direct) {
+    return String(direct);
+  }
+  const content = payload?.output?.choices?.[0]?.message?.content;
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  const image = content.find((item) => item?.image || item?.url);
+  return String(image?.image || image?.url || "");
+}
+
+async function fetchWithTimeout(url, options, timeoutMs, timeoutMessage, networkMessage) {
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      throw new Error(timeoutMessage);
+    }
+    if (error?.name === "TypeError") {
+      throw new Error(networkMessage);
+    }
+    throw error;
+  }
+}
+
+export function resolvePublicFile(rootDir, pathname) {
+  let decoded = String(pathname || "");
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    return null;
+  }
+  const requestPath = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
+  if (!requestPath || requestPath.includes("\0")) {
+    return null;
+  }
+  const root = path.resolve(rootDir);
+  const filePath = path.resolve(root, requestPath);
+  const relative = path.relative(root, filePath);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    return null;
+  }
+  if (relative.split(path.sep).some((segment) => !segment || segment.startsWith("."))) {
+    return null;
+  }
+  if (BLOCKED_PUBLIC_FILES.has(path.basename(filePath))) {
+    return null;
+  }
+  const extension = path.extname(filePath).toLowerCase();
+  if (!PUBLIC_FILE_EXTENSIONS.has(extension)) {
+    return null;
+  }
+  return filePath;
+}
+
+export {
+  server,
+  buildLocalLookupPayload,
+  detectPoemForm,
+  normalizePoemForm,
+  getPoemFormGuide,
+  parseJsonContent,
+  normalizeStringList,
+  normalizeVisualStyleProfile,
+  formatStyleLookupError,
+  loadEnvFile,
+  getDefaultModel,
+};

@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="丹青词境是一个本地创作工作台，用名家预设、样本和联网代表作生成图像与诗词。" />
     <title>丹青词境</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%238b3f1f'/%3E%3Cpath d='M18 42c8-14 12-22 14-22s6 8 14 22' fill='none' stroke='%23f7efe2' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -46,11 +48,11 @@
           <div class="sidebar-section">
             <p class="panel-kicker">模式</p>
             <div class="mode-switch" aria-label="模式切换">
-              <button class="mode-chip is-active" data-mode-tab="image">
+              <button type="button" class="mode-chip is-active" data-mode-tab="image" aria-pressed="true">
                 <span class="mode-chip-title">图像生成</span>
                 <span class="mode-chip-note">学习画风后生成新画面</span>
               </button>
-              <button class="mode-chip" data-mode-tab="poem">
+              <button type="button" class="mode-chip" data-mode-tab="poem" aria-pressed="false">
                 <span class="mode-chip-title">诗词生成</span>
                 <span class="mode-chip-note">学习诗风后生成新诗词</span>
               </button>
@@ -126,8 +128,8 @@
                   <div class="search-row">
                     <input id="image-lookup-name" type="text" placeholder="例如：梵高、柳永、宫崎骏、Dickinson" />
                     <div class="search-actions">
-                      <button id="image-lookup-search" class="secondary-button">联网检索</button>
-                      <button id="image-lookup-clear" class="ghost-button">清除</button>
+                      <button type="button" id="image-lookup-search" class="secondary-button">联网检索</button>
+                      <button type="button" id="image-lookup-clear" class="ghost-button">清除</button>
                     </div>
                   </div>
                   <div class="lookup-result" id="image-lookup-result"></div>
@@ -139,7 +141,7 @@
                       <span class="section-index">03</span>
                       <label>已保存图像风格模板</label>
                     </div>
-                    <button id="clear-image-templates" class="mini-button">清空模板</button>
+                    <button type="button" id="clear-image-templates" class="mini-button">清空模板</button>
                   </div>
                   <div class="library-list" id="image-template-list"></div>
                 </section>
@@ -150,7 +152,7 @@
                       <span class="section-index">04</span>
                       <label for="image-upload">上传参考图片</label>
                     </div>
-                    <p>系统会从样本中提取色彩、纹理、明暗与构图倾向。</p>
+                    <p>默认在本地采样主色。文本模型支持看图时，还会读取纹理、明暗与构图。</p>
                   </div>
                   <div class="upload-box">
                     <input id="image-upload" type="file" accept="image/*" multiple />
@@ -173,9 +175,9 @@
                     placeholder="例如：秋夜江畔，一轮明月照着远山与渔火，整体要有奔涌笔触与深青金色调"
                   ></textarea>
                   <div class="action-row">
-                    <button id="generate-image" class="primary-button">生成新图片</button>
-                    <button id="download-image" class="secondary-button" disabled>导出 PNG</button>
-                    <button id="save-image-template" class="ghost-button">保存为模板</button>
+                    <button type="button" id="generate-image" class="primary-button">生成新图片</button>
+                    <button type="button" id="download-image" class="secondary-button" disabled>导出 PNG</button>
+                    <button type="button" id="save-image-template" class="ghost-button">保存为模板</button>
                   </div>
                 </section>
               </div>
@@ -207,8 +209,8 @@
                   <div class="search-row">
                     <input id="poem-lookup-name" type="text" placeholder="例如：李白、Dickinson、Baudelaire、芭蕉" />
                     <div class="search-actions">
-                      <button id="poem-lookup-search" class="secondary-button">联网检索</button>
-                      <button id="poem-lookup-clear" class="ghost-button">清除</button>
+                      <button type="button" id="poem-lookup-search" class="secondary-button">联网检索</button>
+                      <button type="button" id="poem-lookup-clear" class="ghost-button">清除</button>
                     </div>
                   </div>
                   <div class="lookup-result" id="poem-lookup-result"></div>
@@ -220,7 +222,7 @@
                       <span class="section-index">03</span>
                       <label>已保存诗风模板</label>
                     </div>
-                    <button id="clear-poem-templates" class="mini-button">清空模板</button>
+                    <button type="button" id="clear-poem-templates" class="mini-button">清空模板</button>
                   </div>
                   <div class="library-list" id="poem-template-list"></div>
                 </section>
@@ -254,9 +256,9 @@
                     placeholder="例如：写一首关于春雨、归舟与故人的短诗；若选择海外诗人，请按其语言创作并附中文翻译"
                   ></textarea>
                   <div class="action-row">
-                    <button id="generate-poem" class="primary-button">生成新诗词</button>
-                    <button id="copy-poem" class="secondary-button" disabled>复制文本</button>
-                    <button id="save-poem-template" class="ghost-button">保存为模板</button>
+                    <button type="button" id="generate-poem" class="primary-button">生成新诗词</button>
+                    <button type="button" id="copy-poem" class="secondary-button" disabled>复制文本</button>
+                    <button type="button" id="save-poem-template" class="ghost-button">保存为模板</button>
                   </div>
                 </section>
               </div>
@@ -282,7 +284,7 @@
                     <span>图像完成后会在这里呈现，同时保留清晰的作品展示比例。</span>
                   </div>
                 </div>
-                <div class="insight-card" id="image-insight-card">
+                <div class="insight-card" id="image-insight-card" aria-live="polite">
                   <h3>图像风格解读</h3>
                   <p>尚未生成。选择画家预设或上传图片后，系统会显示本次学习到的风格摘要。</p>
                 </div>
@@ -293,7 +295,7 @@
                     <h3>图片生成历史</h3>
                     <p>保留缩略图回看与二次导出入口，便于快速比对构图与色调。</p>
                   </div>
-                  <button id="clear-image-history" class="mini-button">清空历史</button>
+                  <button type="button" id="clear-image-history" class="mini-button">清空历史</button>
                 </div>
                 <div class="history-gallery" id="image-history-list"></div>
               </div>
@@ -307,7 +309,7 @@
                     <span>标题与正文会以更适合阅读的版式排布在这里。</span>
                   </div>
                 </article>
-                <div class="insight-card" id="poem-insight-card">
+                <div class="insight-card" id="poem-insight-card" aria-live="polite">
                   <h3>诗风解读</h3>
                   <p>尚未生成。选择词人预设或上传诗词后，系统会总结意象、节奏和语气。</p>
                 </div>
@@ -318,7 +320,7 @@
                     <h3>诗词生成历史</h3>
                     <p>最近作品会按标题、正文摘句与摘要集中展示，便于回看与比稿。</p>
                   </div>
-                  <button id="clear-poem-history" class="mini-button">清空历史</button>
+                  <button type="button" id="clear-poem-history" class="mini-button">清空历史</button>
                 </div>
                 <div class="history-list" id="poem-history-list"></div>
               </div>

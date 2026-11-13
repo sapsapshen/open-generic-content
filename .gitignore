@@ -1,3 +1,4 @@
 .env
 .runtime/
 .DS_Store
+node_modules/
