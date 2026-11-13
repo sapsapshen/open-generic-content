@@ -1,5 +1,7 @@
 # 2026-05-12 Interface Redesign Design
 
+状态：这份文件是界面重做时的设计记录。根目录没有单独的 `DESIGN.md`。页面实际使用系统自带的宋体与苹方/雅黑，而不是外链的 Noto Serif SC 与 Outfit，这样在离线和中国大陆网络下也能保持同一套版式。
+
 ## Direction
 
 Chosen direction: literati atelier.

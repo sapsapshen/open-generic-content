@@ -2,7 +2,7 @@
 
 丹青词境是一个面向中文创作场景的双模态生成应用：同一套工作台里，既可以学习绘画风格生成新图像，也可以学习诗歌文体生成新作品。它把内置名家预设、用户上传样本、联网检索到的人物代表作，统一压成一次运行时的风格抽取，再把抽取结果送给模型生成最终内容。
 
-默认配置优先使用中国大陆可稳定访问的模型供应商：文本链路为 DeepSeek，图像链路为阿里百炼 `wanx2.1-t2i-turbo`，并保留硅基流动作备用选项。
+默认配置优先使用中国大陆可稳定访问的模型供应商：文本链路为 DeepSeek `deepseek-flash`，图像链路为阿里百炼 `wan2.2-t2i-flash`，并保留硅基流动作备用选项。已有 `.env` 里手写的模型名不会被自动改写。
 
 <img width="2313" height="1287" alt="56da4ddd-c0c6-408b-88f2-9f402da9d44b" src="https://github.com/user-attachments/assets/67db7feb-b90b-4c12-819e-4c25849dcbd1" />
 
@@ -44,7 +44,7 @@
 ### 图像链路
 
 1. 选择画家、动画大师或视觉风格预设。
-2. 可选上传多张参考图片，补充色彩、质感、构图和笔触信息。
+2. 可选上传最多 4 张、每张 4MB 以内的参考图片。默认只采样主色；视觉模型开启后才会读取画面本身。
 3. 可选输入人物姓名，联网获取条目和代表作，作为额外风格参考。
 4. 服务端先调用文本模型总结结构化视觉风格，再把摘要交给图像模型生成结果。
 5. 前端支持 PNG 导出、缩略图画廊和历史记录。
@@ -64,7 +64,7 @@
 
 ### 运行环境
 
-- Node.js 18 及以上
+- Node.js 18 及以上（CI 使用 Node.js 22）
 - 一个可用的文本模型密钥
 - 一个可用的图像模型密钥
 
@@ -90,6 +90,14 @@ npm start
 http://localhost:3017
 ```
 
+没有 `.env` 时，`npm start` 与 `./start.sh` 都会使用 `3017`，文本供应商为 DeepSeek，图像供应商为百炼。只有显式设置了 `PORT` 或 `TEXT_PROVIDER` / `IMAGE_PROVIDER`，服务才会改用别的配置；非法端口会在启动时报错并退出。
+
+运行测试：
+
+```bash
+npm test
+```
+
 也可以使用根目录脚本：
 
 ```bash
@@ -109,8 +117,9 @@ http://localhost:3017
 | `TEXT_PROVIDER` | 文本模型供应商，默认 `deepseek` |
 | `TEXT_API_KEY` | 文本模型密钥 |
 | `TEXT_BASE_URL` | 文本模型接口地址 |
-| `TEXT_MODEL` | 文本模型名称 |
+| `TEXT_MODEL` | 文本模型名称。DeepSeek 默认 `deepseek-flash`；`deepseek-chat` 已于 2026-07 退役 |
 | `TEXT_ENDPOINT_PATH` | 文本模型接口路径，默认 `/chat/completions` |
+| `TEXT_SUPPORTS_VISION` | 设为 `true` 时才把参考图像素送给文本模型。DeepSeek 默认不看图 |
 
 ### 图像模型
 
@@ -119,7 +128,7 @@ http://localhost:3017
 | `IMAGE_PROVIDER` | 图像模型供应商，默认 `bailian` |
 | `IMAGE_API_KEY` | 图像模型密钥 |
 | `IMAGE_BASE_URL` | 图像模型接口地址 |
-| `IMAGE_MODEL` | 图像模型名称 |
+| `IMAGE_MODEL` | 图像模型名称。百炼默认 `wan2.2-t2i-flash`，仍走异步任务接口；`wan2.6` 的请求体不同，不能只改模型名 |
 | `IMAGE_ENDPOINT_PATH` | 图像模型接口路径 |
 
 ### 供应商密钥与端口
@@ -129,7 +138,7 @@ http://localhost:3017
 | `DEEPSEEK_API_KEY` | `TEXT_PROVIDER=deepseek` 时可直接使用 |
 | `BAILIAN_API_KEY` | `TEXT_PROVIDER=bailian` 或 `IMAGE_PROVIDER=bailian` 时可使用 |
 | `SILICONFLOW_API_KEY` | `TEXT_PROVIDER=siliconflow` 或 `IMAGE_PROVIDER=siliconflow` 时可使用 |
-| `PORT` | 服务端口，示例默认值为 `3017` |
+| `PORT` | 服务端口，未设置时为 `3017`。带引号的值会被正确去掉引号 |
 
 ## 项目结构
 
@@ -139,17 +148,23 @@ http://localhost:3017
 | `app.js` | 前端状态管理、上传、检索、历史、模板和结果渲染 |
 | `index.html` | 页面结构 |
 | `styles.css` | 页面样式与设计系统 |
+| `test/server.test.js` | 服务端纯函数与 HTTP 行为测试 |
+| `.github/workflows/ci.yml` | 在 Node.js 22 上运行测试、语法检查和脚本语法检查 |
 | `start.sh` / `stop.sh` / `restart.sh` | 本地后台服务管理脚本 |
 | `.env.example` | 非敏感环境变量模板 |
-| `DESIGN.md` | 当前界面的设计语义与视觉说明 |
+| `docs/plans/2026-05-12-interface-redesign-design.md` | 界面重做时的设计记录 |
 
 ## 当前实现细节
 
 - 图像生成不是直接把提示词送给图片模型，而是先由文本模型抽取视觉风格摘要，再二次生成。
-- 诗词生成会综合预设、上传样本、联网人物和提示词，生成结构化 JSON 结果后再在前端展示。
-- 联网检索带有服务端内存缓存，重复查询会优先复用已获取的候选人物和百科数据。
+- 默认的 DeepSeek 文本模型不接收图片。上传参考图时，浏览器会在本地采样主色，服务端把主色写进风格摘要；只有 `TEXT_SUPPORTS_VISION=true` 或模型名本身是视觉模型时，才会把图像像素发给文本模型。
+- 百炼万相 2.2 及更早模型会截断超过 500 字的提示词。服务端会把用户请求和风格摘要压到这个长度内，并关闭提示词自动扩写，避免静默丢掉后半段。
+- 诗词生成会综合预设、上传样本、联网人物和提示词，生成结构化 JSON 结果后再在前端展示。DeepSeek 请求会关闭思考模式，避免 JSON 被推理文本打断。
+- 联网检索带有服务端内存缓存。百科不可用时，内置的李白、柳永、梵高、宫崎骏等条目会作为本地兜底。
 - “学习风格”属于运行时少样本风格抽取，不是模型微调，也不会长期训练用户私有权重。
-- 本地数据如模板和历史主要保存在浏览器本地存储中，适合单机演示和轻量使用。
+- 模板和诗词历史保存在 `localStorage`。图片历史含有较大的图像数据，保存在 `sessionStorage`，关闭页面后不会保留。
+- 页面只公开 HTML、CSS、前端脚本和图片资源。`.env`、`server.js` 和其他点号文件不会被静态服务读出。
+- `.env` 支持 `export KEY=value`、成对引号，以及未加引号的值后面的 `#` 注释。已经存在于进程环境里的变量不会被文件覆盖。
 
 ## 适用场景
 

@@ -621,6 +621,13 @@ button:focus-visible,
   background: rgba(255, 251, 245, 0.82);
 }
 
+.upload-list span.color-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 999px;
+}
+
 .action-row {
   display: grid;
   grid-template-columns: repeat(2, max-content);

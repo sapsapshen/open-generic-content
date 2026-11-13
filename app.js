@@ -285,6 +285,7 @@ const state = {
   backend: {
     checked: false,
     ready: false,
+    textSupportsVision: false,
     message: "正在检测模型服务状态...",
   },
   templates: {
@@ -294,6 +295,8 @@ const state = {
   image: {
     selectedPresetId: imagePresets[0].id,
     uploadedFiles: [],
+    colorHints: [],
+    storageWarning: "",
     lookupCandidates: [],
     lookup: null,
     generatedUrl: "",
@@ -307,6 +310,7 @@ const state = {
     uploadedFiles: [],
     uploadedTexts: [],
     uploadedProfile: null,
+    storageWarning: "",
     lookupCandidates: [],
     lookup: null,
     generatedText: "",
@@ -517,7 +521,11 @@ function handleLookupResultClick(event) {
 }
 
 function switchMode(mode) {
-  dom.modeTabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.modeTab === mode));
+  dom.modeTabs.forEach((tab) => {
+    const active = tab.dataset.modeTab === mode;
+    tab.classList.toggle("is-active", active);
+    tab.setAttribute("aria-pressed", active ? "true" : "false");
+  });
   dom.modePanels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.modePanel === mode));
   dom.outputPanels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.outputPanel === mode));
 }
@@ -529,9 +537,9 @@ function renderPresetCards() {
   dom.imagePresets.innerHTML = imagePresets
     .map(
       (preset) => `
-        <button class="preset-card ${!imageLookupActive && preset.id === state.image.selectedPresetId ? "is-selected" : ""}" data-image-preset="${preset.id}">
-          <strong>${preset.name}</strong>
-          <span>${preset.description}</span>
+        <button type="button" class="preset-card ${!imageLookupActive && preset.id === state.image.selectedPresetId ? "is-selected" : ""}" data-image-preset="${escapeAttribute(preset.id)}">
+          <strong>${escapeHtml(preset.name)}</strong>
+          <span>${escapeHtml(preset.description)}</span>
         </button>
       `
     )
@@ -540,10 +548,10 @@ function renderPresetCards() {
   dom.poetPresets.innerHTML = poetPresets
     .map(
       (preset) => `
-        <button class="preset-card ${!poemLookupActive && preset.id === state.poem.selectedPresetId ? "is-selected" : ""}" data-poet-preset="${preset.id}">
-          <strong>${preset.name}</strong>
-          <span>${preset.description}</span>
-          <span class="preset-meta">${preset.languageLabel || getPoemLanguageLabel(preset.language)}</span>
+        <button type="button" class="preset-card ${!poemLookupActive && preset.id === state.poem.selectedPresetId ? "is-selected" : ""}" data-poet-preset="${escapeAttribute(preset.id)}">
+          <strong>${escapeHtml(preset.name)}</strong>
+          <span>${escapeHtml(preset.description)}</span>
+          <span class="preset-meta">${escapeHtml(preset.languageLabel || getPoemLanguageLabel(preset.language))}</span>
         </button>
       `
     )
@@ -573,9 +581,10 @@ function renderLookupResult(mode) {
         .map(
           (candidate) => `
             <button
+              type="button"
               class="candidate-pill ${candidate.id === activeLookup.id ? "is-selected" : ""}"
-              data-lookup-candidate="${candidate.id}"
-              data-lookup-mode="${mode}"
+              data-lookup-candidate="${escapeAttribute(candidate.id)}"
+              data-lookup-mode="${escapeAttribute(mode)}"
             >
               ${escapeHtml(candidate.name)}
             </button>
@@ -625,11 +634,11 @@ function renderTemplateList(mode) {
     .map(
       (template) => `
         <div class="library-card">
-          <button class="library-main" data-template-apply="${mode}" data-template-id="${template.id}">
+          <button type="button" class="library-main" data-template-apply="${escapeAttribute(mode)}" data-template-id="${escapeAttribute(template.id)}">
             <strong>${escapeHtml(template.name)}</strong>
             <span>${escapeHtml(template.description)}</span>
           </button>
-          <button class="library-delete" data-template-delete="${mode}" data-template-id="${template.id}">删除</button>
+          <button type="button" class="library-delete" data-template-delete="${escapeAttribute(mode)}" data-template-id="${escapeAttribute(template.id)}">删除</button>
         </div>
       `
     )
@@ -644,16 +653,19 @@ function renderImageSummary(message = "") {
     ? `当前已叠加联网检索参考：${state.image.lookup.name}。代表作包括 ${(state.image.lookup.works || []).slice(0, 3).map((work) => work.title).join("、") || "若干作品"}。`
     : "当前未启用联网检索参考。";
   const uploadNote = state.image.uploadedFiles.length
-    ? `另有 ${state.image.uploadedFiles.length} 张本地参考图会一起送入模型。`
+    ? state.backend.textSupportsVision
+      ? `另有 ${state.image.uploadedFiles.length} 张本地参考图会连同主色送入模型。`
+      : `另有 ${state.image.uploadedFiles.length} 张本地参考图。当前文本模型不直接看图，将使用本地采样的主色参与风格抽取。`
     : "未附加本地参考图片。";
+  const summaryText = message || `${activeReferenceName} 风格参考已激活。${lookupNote}${uploadNote}`;
 
   dom.imageStyleSummary.innerHTML = `
     <h3>当前风格摘要</h3>
-    <p>${message || `${activeReferenceName} 风格参考已激活。${lookupNote}${uploadNote}`}</p>
+    <p>${escapeHtml(summaryText)}</p>
     <ul>
       <li>主导情绪：${escapeHtml(preset.mood)}</li>
-      <li>基础色板：${preset.palette.slice(0, 5).join("、")}</li>
-      <li>风格关键词：${preset.keywords.join("、")}</li>
+      <li>基础色板：${escapeHtml(preset.palette.slice(0, 5).join("、"))}</li>
+      <li>风格关键词：${escapeHtml(preset.keywords.join("、"))}</li>
       <li>模型状态：${escapeHtml(backendNote)}</li>
     </ul>
   `;
@@ -673,9 +685,11 @@ function renderPoemSummary(message = "") {
     ? `另有 ${state.poem.uploadedTexts.length} 份本地诗词样本会一起送入模型。`
     : "未附加本地诗词文本。";
 
+  const summaryText = message || `${activeReferenceName} 风格参考已激活。${lookupNote}${uploadNote}`;
+
   dom.poemStyleSummary.innerHTML = `
     <h3>当前诗风摘要</h3>
-    <p>${message || `${activeReferenceName} 风格参考已激活。${lookupNote}${uploadNote}`}</p>
+    <p>${escapeHtml(summaryText)}</p>
     <ul>
       <li>整体语气：${escapeHtml(profile.tone || preset.tone)}</li>
       <li>输出语言：${escapeHtml(getPoemLanguageLabel(profile.language || preset.language || "zh"))}${(profile.language || preset.language) === "zh" ? "" : "，并附中文翻译"}</li>
@@ -687,17 +701,18 @@ function renderPoemSummary(message = "") {
 }
 
 function renderImageHistory() {
+  const warning = state.image.storageWarning ? `<div class="empty-library">${escapeHtml(state.image.storageWarning)}</div>` : "";
   if (!state.image.history.length) {
-    dom.imageHistoryList.innerHTML = '<div class="empty-library">尚无图片历史。生成后会自动进入缩略图画廊。</div>';
+    dom.imageHistoryList.innerHTML = `${warning}<div class="empty-library">尚无图片历史。生成后会自动进入缩略图画廊。关闭页面后图片历史不会保留。</div>`;
     return;
   }
 
-  dom.imageHistoryList.innerHTML = state.image.history
+  dom.imageHistoryList.innerHTML = warning + state.image.history
     .map(
       (item) => `
         <div class="history-item-shell">
-          <button class="history-delete" data-image-history-delete="${item.id}">删除</button>
-          <button class="history-item" data-image-history-id="${item.id}">
+          <button type="button" class="history-delete" data-image-history-delete="${escapeAttribute(item.id)}">删除</button>
+          <button type="button" class="history-item" data-image-history-id="${escapeAttribute(item.id)}">
             <img src="${escapeAttribute(item.imageUrl)}" alt="${escapeAttribute(item.prompt || item.title || "历史图片")}" />
             <div class="history-copy">
               <strong>${escapeHtml(truncateText(item.prompt || "未命名作品", 16))}</strong>
@@ -711,17 +726,18 @@ function renderImageHistory() {
 }
 
 function renderPoemHistory() {
+  const warning = state.poem.storageWarning ? `<div class="empty-library">${escapeHtml(state.poem.storageWarning)}</div>` : "";
   if (!state.poem.history.length) {
-    dom.poemHistoryList.innerHTML = '<div class="empty-library">尚无诗词历史。生成后会自动记录最近作品。</div>';
+    dom.poemHistoryList.innerHTML = `${warning}<div class="empty-library">尚无诗词历史。生成后会自动记录最近作品。</div>`;
     return;
   }
 
-  dom.poemHistoryList.innerHTML = state.poem.history
+  dom.poemHistoryList.innerHTML = warning + state.poem.history
     .map(
       (item) => `
         <div class="poem-history-shell">
-          <button class="history-delete" data-poem-history-delete="${item.id}">删除</button>
-          <button class="poem-history-item" data-poem-history-id="${item.id}">
+          <button type="button" class="history-delete" data-poem-history-delete="${escapeAttribute(item.id)}">删除</button>
+          <button type="button" class="poem-history-item" data-poem-history-id="${escapeAttribute(item.id)}">
             <strong>${escapeHtml(item.title || "未命名")}</strong>
             <div class="poem-history-meta">${escapeHtml(item.lookupName || item.presetName || "风格参考")} · ${escapeHtml(getPoemLanguageLabel(item.language || "zh"))} · ${escapeHtml(formatTime(item.createdAt))}</div>
             <div class="poem-history-lines">${escapeHtml((item.lines || []).slice(0, 2).join(" / "))}</div>
@@ -737,6 +753,7 @@ async function checkBackendStatus() {
     const result = await requestJson("/api/health", { method: "GET" });
     state.backend.checked = true;
     state.backend.ready = Boolean(result.ready);
+    state.backend.textSupportsVision = Boolean(result.textSupportsVision);
     state.backend.message = result.ready
       ? `模型服务已连接，文本：${result.textProvider || "未命名供应商"} / ${result.textModel}；图片：${result.imageProvider || "未命名供应商"} / ${result.imageModel}`
       : normalizeBackendMessage(result.message || "模型服务未配置完成。", result);
@@ -757,31 +774,80 @@ function getSelectedPoetPreset() {
   return poetPresets.find((preset) => preset.id === state.poem.selectedPresetId) || poetPresets[0];
 }
 
-function handleImageUpload(event) {
+async function handleImageUpload(event) {
   const files = Array.from(event.target.files || []);
-  state.image.uploadedFiles = files;
-  dom.imageUploadList.innerHTML = files.map((file) => `<span>${escapeHtml(file.name)}</span>`).join("");
-  renderImageSummary();
-}
+  const accepted = [];
+  const rejected = [];
+  for (const file of files) {
+    if (accepted.length >= 4) {
+      rejected.push(`${file.name}（超过 4 张）`);
+      continue;
+    }
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 4 * 1024 * 1024) {
+      rejected.push(`${file.name}（需为 4MB 以内的 PNG、JPEG、WEBP 或 GIF）`);
+      continue;
+    }
+    accepted.push(file);
+  }
 
-async function handlePoemUpload(event) {
-  const files = Array.from(event.target.files || []);
-  state.poem.uploadedFiles = files;
-  dom.poemUploadList.innerHTML = files.map((file) => `<span>${escapeHtml(file.name)}</span>`).join("");
+  state.image.uploadedFiles = accepted;
+  state.image.colorHints = [];
+  renderImageUploadList();
+  const rejectionNote = rejected.length ? `以下文件未加入参考：${rejected.join("、")}。` : "";
+  renderImageSummary(rejectionNote);
 
-  if (!files.length) {
-    resetPoemUploads();
-    renderPoemSummary();
+  if (!accepted.length) {
     return;
   }
 
   try {
-    state.poem.uploadedTexts = await Promise.all(files.map((file) => file.text()));
+    const hints = [];
+    for (const file of accepted) {
+      hints.push(...(await extractColorHints(file)));
+    }
+    state.image.colorHints = uniqueColorHints(hints);
+    renderImageUploadList();
+    if (!rejectionNote && state.image.colorHints.length) {
+      renderImageSummary(`已从参考图采样主色：${state.image.colorHints.join("、")}。`);
+    }
+  } catch (error) {
+    renderImageSummary(rejectionNote || "参考图已加入，但主色采样失败，生成时会继续使用预设与提示词。");
+  }
+}
+
+async function handlePoemUpload(event) {
+  const files = Array.from(event.target.files || []);
+  const accepted = [];
+  const rejected = [];
+  for (const file of files) {
+    if (accepted.length >= 10) {
+      rejected.push(`${file.name}（超过 10 份）`);
+      continue;
+    }
+    if (file.size > 200 * 1024) {
+      rejected.push(`${file.name}（超过 200KB）`);
+      continue;
+    }
+    accepted.push(file);
+  }
+
+  state.poem.uploadedFiles = accepted;
+  dom.poemUploadList.innerHTML = accepted.map((file) => `<span>${escapeHtml(file.name)}</span>`).join("");
+
+  if (!accepted.length) {
+    resetPoemUploads();
+    renderPoemSummary(rejected.length ? `以下文件未加入样本：${rejected.join("、")}。` : "");
+    return;
+  }
+
+  try {
+    state.poem.uploadedTexts = await Promise.all(accepted.map((file) => file.text()));
     state.poem.uploadedProfile = analyzePoetryCorpus(state.poem.uploadedTexts);
-    renderPoemSummary();
+    const rejectionNote = rejected.length ? `以下文件未加入样本：${rejected.join("、")}。` : "";
+    renderPoemSummary(rejectionNote);
   } catch (error) {
     resetPoemUploads();
-    renderPoemSummary("诗词文本读取失败，请确认文件编码为 UTF-8。", true);
+    renderPoemSummary("诗词文本读取失败，请确认文件编码为 UTF-8。");
   }
 }
 
@@ -984,7 +1050,15 @@ function clearTemplates(mode) {
 }
 
 function persistTemplates(mode) {
-  writeStorage(localStorage, mode === "image" ? STORAGE_KEYS.imageTemplates : STORAGE_KEYS.poemTemplates, state.templates[mode]);
+  const ok = writeStorage(localStorage, mode === "image" ? STORAGE_KEYS.imageTemplates : STORAGE_KEYS.poemTemplates, state.templates[mode]);
+  if (!ok) {
+    const message = "浏览器存储空间不足，模板只保留在当前页面内存中。";
+    if (mode === "image") {
+      renderImageSummary(message);
+    } else {
+      renderPoemSummary(message);
+    }
+  }
 }
 
 function clearHistory(mode) {
@@ -1033,6 +1107,7 @@ async function onGenerateImage() {
         prompt,
         preset: getSelectedImagePreset(),
         uploadedImages,
+        colorHints: state.image.colorHints,
         lookupStyle: state.image.lookup,
       }),
     });
@@ -1040,6 +1115,9 @@ async function onGenerateImage() {
     state.image.generatedPrompt = prompt;
     state.image.generatedUrl = result.imageDataUrl || result.imageUrl || "";
     state.image.generatedMime = result.mimeType || "image/png";
+    if (!state.image.generatedUrl) {
+      throw new Error("图片模型未返回可用图像数据");
+    }
     state.image.generatedSummary = result.summary || "模型已根据样本与代表作抽取视觉风格并输出图片。";
     pushImageHistory({
       id: createId(),
@@ -1130,11 +1208,11 @@ function pushPoemHistory(entry) {
 }
 
 function persistHistory(mode) {
-  if (mode === "image") {
-    writeStorage(sessionStorage, STORAGE_KEYS.imageHistory, state.image.history);
-    return;
-  }
-  writeStorage(localStorage, STORAGE_KEYS.poemHistory, state.poem.history);
+  const ok = mode === "image"
+    ? writeStorage(sessionStorage, STORAGE_KEYS.imageHistory, state.image.history)
+    : writeStorage(localStorage, STORAGE_KEYS.poemHistory, state.poem.history);
+  state[mode].storageWarning = ok ? "" : "浏览器存储空间不足，本次历史只保留在当前页面内存中。";
+  return ok;
 }
 
 function commitGeneratedImage() {
@@ -1197,21 +1275,112 @@ async function copyGeneratedPoem() {
   if (!state.poem.generatedText) {
     return;
   }
+  const copied = await writeClipboardText(state.poem.generatedText);
+  dom.copyPoem.textContent = copied ? "已复制" : "复制失败";
+  setTimeout(() => {
+    dom.copyPoem.textContent = "复制文本";
+  }, 1400);
+}
+
+async function writeClipboardText(text) {
   try {
-    await navigator.clipboard.writeText(state.poem.generatedText);
-    dom.copyPoem.textContent = "已复制";
-    setTimeout(() => {
-      dom.copyPoem.textContent = "复制文本";
-    }, 1400);
-  } catch (error) {
-    console.error(error);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through to the selection-based copy path.
   }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+  textarea.remove();
+  return copied;
 }
 
 function resetImageUploads() {
   state.image.uploadedFiles = [];
+  state.image.colorHints = [];
   dom.imageUpload.value = "";
   dom.imageUploadList.innerHTML = "";
+}
+
+function renderImageUploadList() {
+  const files = state.image.uploadedFiles.map((file) => `<span>${escapeHtml(file.name)}</span>`).join("");
+  const swatches = state.image.colorHints
+    .map((color) => `<span class="color-swatch" style="background:${escapeAttribute(color)}" title="${escapeAttribute(color)}"></span>`)
+    .join("");
+  dom.imageUploadList.innerHTML = `${files}${swatches}`;
+}
+
+function uniqueColorHints(colors) {
+  const seen = new Set();
+  const unique = [];
+  for (const color of colors) {
+    const normalized = String(color || "").toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(normalized) || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    unique.push(normalized);
+    if (unique.length >= 8) {
+      break;
+    }
+  }
+  return unique;
+}
+
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("参考图无法解码"));
+    image.src = src;
+  });
+}
+
+async function extractColorHints(file) {
+  const dataUrl = await fileToDataUrl(file);
+  const image = await loadImageElement(dataUrl);
+  const canvas = document.createElement("canvas");
+  const size = 24;
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return [];
+  }
+  context.drawImage(image, 0, 0, size, size);
+  const { data } = context.getImageData(0, 0, size, size);
+  const buckets = new Map();
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] < 128) {
+      continue;
+    }
+    const red = data[index] >> 4;
+    const green = data[index + 1] >> 4;
+    const blue = data[index + 2] >> 4;
+    const key = `${red},${green},${blue}`;
+    buckets.set(key, (buckets.get(key) || 0) + 1);
+  }
+  return [...buckets.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 4)
+    .map(([key]) => {
+      const channels = key.split(",").map((part) => Number(part) * 17);
+      return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+    });
 }
 
 function resetPoemUploads() {
@@ -1427,8 +1596,9 @@ function readStorage(storage, key, fallbackValue) {
 function writeStorage(storage, key, value) {
   try {
     storage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
-    // Ignore quota failures and keep in-memory state.
+    return false;
   }
 }
 
